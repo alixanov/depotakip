@@ -1,0 +1,73 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 880 240"
+  role="img"
+  aria-label="Sadiya Kargo"
+>
+  <title>Sadiya Kargo</title>
+  <defs>
+    <linearGradient id="sw-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="100%" stop-color="#312E81" />
+    </linearGradient>
+    <linearGradient id="sw-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Mark on the left -->
+  <g>
+    <rect width="240" height="240" rx="52" fill="url(#sw-bg)" />
+    <g transform="translate(0,0) scale(0.469)">
+      <path
+        d="M 416 160
+           C 416 64, 96 64, 96 192
+           C 96 256, 416 256, 416 320
+           C 416 448, 96 448, 96 352"
+        stroke="#FFFFFF"
+        stroke-width="48"
+        stroke-linecap="round"
+        fill="none"
+      />
+      <g transform="translate(256 256)">
+        <rect x="-52" y="-52" width="104" height="104" rx="14" fill="url(#sw-gold)" />
+        <rect
+          x="-52"
+          y="-52"
+          width="104"
+          height="104"
+          rx="14"
+          fill="url(#sw-gold)"
+          transform="rotate(45)"
+        />
+        <circle r="22" fill="#1E3A8A" />
+        <circle r="10" fill="url(#sw-gold)" />
+      </g>
+    </g>
+  </g>
+
+  <!-- Wordmark on the right -->
+  <g
+    transform="translate(280,0)"
+    font-family="'Geist', 'Inter', 'Manrope', 'Helvetica Neue', system-ui, -apple-system, sans-serif"
+  >
+    <text
+      x="0"
+      y="138"
+      font-size="120"
+      font-weight="800"
+      letter-spacing="-4"
+      fill="#0F172A"
+    >Sadiya</text>
+    <rect x="2" y="158" width="60" height="6" rx="3" fill="url(#sw-gold)" />
+    <text
+      x="70"
+      y="166"
+      font-size="32"
+      font-weight="600"
+      letter-spacing="14"
+      fill="#475569"
+    >KARGO</text>
+  </g>
+</svg>

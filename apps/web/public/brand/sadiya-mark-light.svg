@@ -1,0 +1,50 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  role="img"
+  aria-label="Sadiya"
+>
+  <title>Sadiya</title>
+  <defs>
+    <linearGradient id="sadiya-bg-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB" />
+      <stop offset="100%" stop-color="#FEF3C7" />
+    </linearGradient>
+    <linearGradient id="sadiya-ink-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="100%" stop-color="#312E81" />
+    </linearGradient>
+    <linearGradient id="sadiya-gold-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#sadiya-bg-light)" />
+
+  <path
+    d="M 416 160
+       C 416 64, 96 64, 96 192
+       C 96 256, 416 256, 416 320
+       C 416 448, 96 448, 96 352"
+    stroke="url(#sadiya-ink-light)"
+    stroke-width="48"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <g transform="translate(256 256)">
+    <rect x="-52" y="-52" width="104" height="104" rx="14" fill="url(#sadiya-gold-light)" />
+    <rect
+      x="-52"
+      y="-52"
+      width="104"
+      height="104"
+      rx="14"
+      fill="url(#sadiya-gold-light)"
+      transform="rotate(45)"
+    />
+    <circle r="22" fill="url(#sadiya-ink-light)" />
+    <circle r="10" fill="url(#sadiya-gold-light)" />
+  </g>
+</svg>

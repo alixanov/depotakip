@@ -1,0 +1,42 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  role="img"
+  aria-label="Sadiya"
+>
+  <title>Sadiya</title>
+  <!--
+    Monochrome variant — uses `currentColor` everywhere so the parent's
+    `color` controls the rendering. Ideal for printing, embroidery, stamps,
+    favicons-in-context and any single-colour surface.
+  -->
+  <path
+    d="M 416 160
+       C 416 64, 96 64, 96 192
+       C 96 256, 416 256, 416 320
+       C 416 448, 96 448, 96 352"
+    stroke="currentColor"
+    stroke-width="48"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <g transform="translate(256 256)">
+    <rect x="-52" y="-52" width="104" height="104" rx="14" fill="currentColor" />
+    <rect
+      x="-52"
+      y="-52"
+      width="104"
+      height="104"
+      rx="14"
+      fill="currentColor"
+      transform="rotate(45)"
+    />
+    <!-- Use the (transparent) negative-space cutout via even-odd path here:
+         we draw a small circle in the surrounding background colour. When
+         currentColor is white-on-dark, the dot disappears; on dark-on-light
+         it carves a tiny window into the star. For true single-colour
+         output (no negative dot), simply remove the next two circles. -->
+    <circle r="22" fill="white" />
+    <circle r="10" fill="currentColor" />
+  </g>
+</svg>

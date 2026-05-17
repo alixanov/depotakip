@@ -1,0 +1,226 @@
+import { randomBytes, createHash } from "node:crypto";
+import { Types } from "mongoose";
+import { conflict, notFound, unauthorized } from "../../lib/errors.js";
+import { hash, compare } from "../../lib/password.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib/jwt.js";
+import { parseDuration } from "../../lib/duration.js";
+import { env } from "../../config/env.js";
+import { sendMail } from "../../lib/mailer.js";
+import { logger } from "../../lib/logger.js";
+import { User, type UserDoc } from "./user.model.js";
+import { RefreshToken } from "./refreshToken.model.js";
+import { PasswordResetToken } from "./passwordResetToken.model.js";
+
+interface IssueOptions {
+  userAgent: string;
+  ip: string;
+  // Replace existing refresh token (rotation). When set, the old token will be
+  // marked as `revoked + replacedBy = new.tokenId`.
+  replacesTokenId?: string;
+}
+
+interface IssuedTokens {
+  accessToken: string;
+  refreshToken: string;
+  user: ReturnType<UserDoc["toSafeJSON"]>;
+}
+
+export interface AuthContext {
+  userAgent: string;
+  ip: string;
+}
+
+async function issueTokens(user: UserDoc, opts: IssueOptions): Promise<IssuedTokens> {
+  const tokenId = randomBytes(16).toString("hex");
+  const refreshToken = signRefreshToken({ sub: user._id.toString(), tokenId });
+
+  const expiresAt = new Date(Date.now() + parseDuration(env.JWT_REFRESH_TTL));
+  await RefreshToken.create({
+    tokenId,
+    userId: user._id,
+    orgId: user.orgId,
+    userAgent: opts.userAgent,
+    ip: opts.ip,
+    expiresAt,
+  });
+
+  if (opts.replacesTokenId) {
+    await RefreshToken.updateOne(
+      { tokenId: opts.replacesTokenId },
+      { $set: { revokedAt: new Date(), replacedBy: tokenId } }
+    );
+  }
+
+  const accessToken = signAccessToken({
+    sub: user._id.toString(),
+    role: user.role,
+    orgId: user.orgId.toString(),
+  });
+
+  return { accessToken, refreshToken, user: user.toSafeJSON() };
+}
+
+export async function login(
+  email: string,
+  password: string,
+  ctx: AuthContext
+): Promise<IssuedTokens> {
+  const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null });
+  if (!user) throw unauthorized("Email veya şifre hatalı");
+  if (!user.active) throw unauthorized("Hesap devre dışı");
+
+  const ok = await compare(password, user.passwordHash);
+  if (!ok) throw unauthorized("Email veya şifre hatalı");
+
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  return issueTokens(user, ctx);
+}
+
+export async function refresh(refreshTokenJwt: string, ctx: AuthContext): Promise<IssuedTokens> {
+  let payload: { sub: string; tokenId: string };
+  try {
+    payload = verifyRefreshToken(refreshTokenJwt);
+  } catch {
+    throw unauthorized("Geçersiz refresh token");
+  }
+
+  const record = await RefreshToken.findOne({ tokenId: payload.tokenId });
+  if (!record) throw unauthorized("Token bulunamadı");
+
+  if (record.revokedAt) {
+    // Replay attack — invalidate all tokens for this user (defence in depth).
+    await RefreshToken.updateMany(
+      { userId: record.userId, revokedAt: null },
+      { $set: { revokedAt: new Date() } }
+    );
+    throw unauthorized("Token yeniden kullanım tespit edildi");
+  }
+
+  if (record.expiresAt.getTime() < Date.now()) {
+    throw unauthorized("Refresh token süresi doldu");
+  }
+
+  const user = await User.findById(record.userId);
+  if (!user || !user.active || user.deletedAt) {
+    throw unauthorized("Kullanıcı bulunamadı");
+  }
+
+  return issueTokens(user, { ...ctx, replacesTokenId: record.tokenId });
+}
+
+export async function logout(refreshTokenJwt: string | undefined): Promise<void> {
+  if (!refreshTokenJwt) return;
+  try {
+    const { tokenId } = verifyRefreshToken(refreshTokenJwt);
+    await RefreshToken.updateOne({ tokenId, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  } catch {
+    // ignore — already invalid
+  }
+}
+
+export async function me(userId: string) {
+  const user = await User.findOne({ _id: userId, deletedAt: null });
+  if (!user) throw notFound("Kullanıcı bulunamadı");
+  return user.toSafeJSON();
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null });
+  if (!user) {
+    // Don't reveal whether the email exists.
+    logger.info({ email }, "forgot_password_unknown_email");
+    return;
+  }
+
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await PasswordResetToken.create({
+    userId: user._id,
+    tokenHash,
+    expiresAt,
+  });
+
+  const link = `${env.WEB_BASE_URL}/reset-password/${rawToken}`;
+  await sendMail({
+    to: user.email,
+    subject: "Şifre sıfırlama",
+    text: `Şifrenizi sıfırlamak için: ${link}\nBu bağlantı 1 saat sonra geçersiz olacaktır.`,
+  });
+}
+
+export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const record = await PasswordResetToken.findOne({ tokenHash });
+  if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
+    throw unauthorized("Token geçersiz veya süresi dolmuş");
+  }
+
+  const user = await User.findById(record.userId);
+  if (!user || user.deletedAt) throw notFound("Kullanıcı bulunamadı");
+
+  user.passwordHash = await hash(newPassword);
+  user.mustChangePassword = false;
+  await user.save();
+
+  record.usedAt = new Date();
+  await record.save();
+
+  // Invalidate all active refresh tokens for this user.
+  await RefreshToken.updateMany(
+    { userId: user._id, revokedAt: null },
+    { $set: { revokedAt: new Date() } }
+  );
+}
+
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const user = await User.findOne({ _id: userId, deletedAt: null });
+  if (!user) throw notFound("Kullanıcı bulunamadı");
+
+  const ok = await compare(currentPassword, user.passwordHash);
+  if (!ok) throw unauthorized("Mevcut şifre hatalı");
+
+  user.passwordHash = await hash(newPassword);
+  user.mustChangePassword = false;
+  await user.save();
+}
+
+/** Used by the seed migration to create the first admin idempotently. */
+export async function ensureAdmin(args: {
+  email: string;
+  password: string;
+  fullName: string;
+  orgId: Types.ObjectId | string;
+}): Promise<UserDoc> {
+  const existing = await User.findOne({ email: args.email.toLowerCase() });
+  if (existing) return existing;
+  const passwordHash = await hash(args.password);
+  try {
+    return await User.create({
+      orgId: new Types.ObjectId(args.orgId),
+      email: args.email,
+      passwordHash,
+      fullName: args.fullName,
+      role: "admin",
+      active: true,
+      mustChangePassword: false,
+    });
+  } catch (err: unknown) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code: number }).code === 11000
+    ) {
+      throw conflict("Email zaten kayıtlı");
+    }
+    throw err;
+  }
+}

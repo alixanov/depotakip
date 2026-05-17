@@ -1,0 +1,8 @@
+node_modules
+build
+dist
+coverage
+package-lock.json
+apps/web/build
+apps/web/node_modules
+apps/api/node_modules

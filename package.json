@@ -1,40 +1,57 @@
 {
-  "name": "takip",
-  "version": "0.1.0",
+  "name": "depotakip",
+  "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^13.5.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "styled-components": "^6.4.1",
-    "web-vitals": "^2.1.4"
-  },
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "start": "react-scripts start",
-    "build": "CI=false GENERATE_SOURCEMAP=false react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "npm-run-all --parallel dev:*",
+    "dev:web": "npm run dev --workspace @depotakip/web",
+    "dev:api": "npm run dev --workspace @depotakip/api",
+    "start:api": "npm run start --workspace @depotakip/api",
+    "build": "npm-run-all -s build:*",
+    "build:api": "npm run build --workspace @depotakip/api",
+    "build:web": "npm run build --workspace @depotakip/web",
+    "test": "npm test --workspace @depotakip/api",
+    "test:api": "npm test --workspace @depotakip/api",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm-run-all -p typecheck:*",
+    "typecheck:api": "npm run typecheck --workspace @depotakip/api",
+    "typecheck:web": "npm run typecheck --workspace @depotakip/web",
+    "migrate:up": "npm run migrate:up --workspace @depotakip/api",
+    "migrate:down": "npm run migrate:down --workspace @depotakip/api",
+    "migrate:status": "npm run migrate:status --workspace @depotakip/api",
+    "prepare": "husky"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^22.9.0",
+    "eslint": "^9.14.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-compiler": "19.1.0-rc.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.14.0"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
+  "lint-staged": {
+    "*.{ts,tsx,js,cjs,mjs}": [
+      "eslint --fix",
+      "prettier --write"
     ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "*.{json,md,css,html,yml,yaml}": "prettier --write"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

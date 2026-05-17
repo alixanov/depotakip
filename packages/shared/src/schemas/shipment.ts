@@ -1,0 +1,33 @@
+import { z } from "zod";
+import { STATUSES } from "../constants.js";
+import { moneySchema, objectIdSchema, phoneSchema } from "./common.js";
+
+export const recipientSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  phone: phoneSchema,
+  addressTr: z.string().trim().min(1).max(500),
+});
+
+export const shipmentItemSchema = z.object({
+  lotId: objectIdSchema,
+  qty: z.coerce.number().int().positive(),
+  senderCharge: moneySchema.nullable().optional(),
+});
+
+export const createShipmentSchema = z.object({
+  carrierId: objectIdSchema,
+  recipient: recipientSchema.nullable().optional(),
+  shipmentDate: z.string().date().optional(),
+  carrierFee: moneySchema,
+  items: z.array(shipmentItemSchema).min(1, "En az bir mal eklemeli"),
+  notes: z.string().trim().max(1000).default(""),
+});
+
+export const updateShipmentStatusSchema = z.object({
+  status: z.enum(STATUSES),
+  comment: z.string().trim().max(500).optional(),
+});
+
+export type CreateShipmentInput = z.infer<typeof createShipmentSchema>;
+export type UpdateShipmentStatusInput = z.infer<typeof updateShipmentStatusSchema>;
+export type RecipientInput = z.infer<typeof recipientSchema>;
