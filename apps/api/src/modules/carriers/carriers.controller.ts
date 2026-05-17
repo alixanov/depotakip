@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateCarrierInput, UpdateCarrierInput } from "@depotakip/shared";
+import type { CreateCarrierInput, UpdateCarrierInput } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./carriers.service.js";

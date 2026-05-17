@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import type { CreateSenderInput, UpdateSenderInput } from "@depotakip/shared";
+import type { CreateSenderInput, UpdateSenderInput } from "@sadiyakargo/shared";
 import { notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Sender } from "./sender.model.js";

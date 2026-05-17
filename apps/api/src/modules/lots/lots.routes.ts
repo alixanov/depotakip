@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createLotSchema, idParamSchema, updateLotSchema } from "@depotakip/shared";
+import { createLotSchema, idParamSchema, updateLotSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./lots.controller.js";

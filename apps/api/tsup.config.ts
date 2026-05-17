@@ -9,6 +9,6 @@ export default defineConfig({
   sourcemap: false,
   splitting: false,
   bundle: true,
-  noExternal: ["@depotakip/shared"],
+  noExternal: ["@sadiyakargo/shared"],
   external: ["bullmq"],
 });

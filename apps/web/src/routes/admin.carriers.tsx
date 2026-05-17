@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { createCarrierSchema, type Carrier, type CreateCarrierInput } from "@depotakip/shared";
+import { createCarrierSchema, type Carrier, type CreateCarrierInput } from "@sadiyakargo/shared";
 import { Plus, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

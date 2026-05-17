@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createUserSchema, idParamSchema, updateUserSchema } from "@depotakip/shared";
+import { createUserSchema, idParamSchema, updateUserSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./users.controller.js";

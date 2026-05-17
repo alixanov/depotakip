@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createExchangeRateSchema, idParamSchema } from "@depotakip/shared";
+import { createExchangeRateSchema, idParamSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./exchangeRates.controller.js";

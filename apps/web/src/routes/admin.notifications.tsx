@@ -10,7 +10,7 @@ import {
   NOTIFICATION_TEMPLATE_KEYS,
   createTemplateSchema,
   type CreateTemplateInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,7 @@ import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requireRole } from "@/lib/guards";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import type { NotificationTemplateKey } from "@depotakip/shared";
+import type { NotificationTemplateKey } from "@sadiyakargo/shared";
 
 const TEMPLATE_KEY_PREFIX = "admin:tpl_key_";
 

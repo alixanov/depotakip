@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createSenderSchema, idParamSchema, updateSenderSchema } from "@depotakip/shared";
+import { createSenderSchema, idParamSchema, updateSenderSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./senders.controller.js";

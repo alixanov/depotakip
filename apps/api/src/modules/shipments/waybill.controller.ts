@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createElement } from "react";
 import { Types } from "mongoose";
-import { WaybillDocument, qrDataUrl, renderToStream } from "@depotakip/pdf-templates";
+import { WaybillDocument, qrDataUrl, renderToStream } from "@sadiyakargo/pdf-templates";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { env } from "../../config/env.js";

@@ -4,7 +4,7 @@ import type {
   Shipment,
   Status,
   UpdateShipmentStatusInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { API_BASE } from "@/lib/env";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "./client";

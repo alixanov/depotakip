@@ -1,5 +1,5 @@
 import { Types, type ClientSession } from "mongoose";
-import type { CreateTransactionInput, Currency, TransactionKind } from "@depotakip/shared";
+import type { CreateTransactionInput, Currency, TransactionKind } from "@sadiyakargo/shared";
 import { badRequest, notFound } from "../../lib/errors.js";
 import { paginate, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "../carriers/carrier.model.js";

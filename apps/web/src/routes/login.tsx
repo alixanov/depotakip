@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { loginSchema, type LoginInput } from "@depotakip/shared";
+import { loginSchema, type LoginInput } from "@sadiyakargo/shared";
 import { ArrowRight, Boxes, ShieldCheck, Truck } from "lucide-react";
 import { z } from "zod";
 import { BrandMark, BrandWordmark } from "@/components/BrandMark";

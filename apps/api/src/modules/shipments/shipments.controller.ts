@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateShipmentInput, Status, UpdateShipmentStatusInput } from "@depotakip/shared";
+import type { CreateShipmentInput, Status, UpdateShipmentStatusInput } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./shipments.service.js";

@@ -3,7 +3,7 @@ import type {
   PaginatedResponse,
   Sender,
   UpdateSenderInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export const sendersApi = {

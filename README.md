@@ -11,12 +11,12 @@ This README only documents how to run the codebase; the spec drives the roadmap.
 ```
 depotakip/
 ├── apps/
-│   ├── web/    @depotakip/web    Vite 6 + React 19 + React Compiler + Tailwind 4 + shadcn/ui
+│   ├── web/    @sadiyakargo/web    Vite 6 + React 19 + React Compiler + Tailwind 4 + shadcn/ui
 │   │                             + TanStack Router + TanStack Query + Zustand + react-hook-form
-│   └── api/    @depotakip/api    Express 5 + Mongoose 8 + JWT (refresh-cookies) + pino + helmet
+│   └── api/    @sadiyakargo/api    Express 5 + Mongoose 8 + JWT (refresh-cookies) + pino + helmet
 │                                 + zod validation + feature-based modules
 ├── packages/
-│   └── shared/ @depotakip/shared Zod schemas + TS types + domain constants (single source)
+│   └── shared/ @sadiyakargo/shared Zod schemas + TS types + domain constants (single source)
 ├── docker-compose.yml            mongo replicaSet + redis + minio
 └── .github/workflows/ci.yml      lint + typecheck + build + test on PR
 ```

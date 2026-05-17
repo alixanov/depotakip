@@ -1,4 +1,4 @@
-import type { CreateExchangeRateInput, Currency } from "@depotakip/shared";
+import type { CreateExchangeRateInput, Currency } from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { ExchangeRate } from "./exchangeRate.model.js";
 

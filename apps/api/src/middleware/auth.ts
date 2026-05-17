@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { Role } from "@depotakip/shared";
+import type { Role } from "@sadiyakargo/shared";
 import { unauthorized, forbidden } from "../lib/errors.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 

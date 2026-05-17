@@ -1,4 +1,4 @@
-import type { Currency, Money } from "@depotakip/shared";
+import type { Currency, Money } from "@sadiyakargo/shared";
 import { useUiStore } from "@/stores/ui";
 import { LOCALE_BCP47 } from "./i18n";
 

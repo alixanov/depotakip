@@ -1,7 +1,11 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { createShipmentSchema, idParamSchema, updateShipmentStatusSchema } from "@depotakip/shared";
+import {
+  createShipmentSchema,
+  idParamSchema,
+  updateShipmentStatusSchema,
+} from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { idempotency } from "../../middleware/idempotency.js";

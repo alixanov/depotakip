@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import type { CreateTemplateInput, UpdateTemplateInput } from "@depotakip/shared";
+import type { CreateTemplateInput, UpdateTemplateInput } from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { tenantFilter } from "../../lib/repository.js";
 import { NotificationTemplate } from "./template.model.js";

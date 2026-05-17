@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import type { CreateLotInput, UpdateLotInput } from "@depotakip/shared";
+import type { CreateLotInput, UpdateLotInput } from "@sadiyakargo/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Category } from "../categories/category.model.js";

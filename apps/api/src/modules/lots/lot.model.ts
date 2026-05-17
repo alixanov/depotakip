@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { Currency, LotStatus } from "@depotakip/shared";
+import type { Currency, LotStatus } from "@sadiyakargo/shared";
 
 interface PhotoRef {
   storageKey: string;

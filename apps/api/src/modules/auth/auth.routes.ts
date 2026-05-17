@@ -5,7 +5,7 @@ import {
   forgotPasswordSchema,
   loginSchema,
   resetPasswordSchema,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { env } from "../../config/env.js";
 import { validate } from "../../middleware/validate.js";
 import { requireAuth } from "../../middleware/auth.js";

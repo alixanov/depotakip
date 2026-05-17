@@ -1,4 +1,4 @@
-import type { User } from "@depotakip/shared";
+import type { User } from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export interface AuthResponse {

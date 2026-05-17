@@ -1,4 +1,4 @@
-import type { PaginatedResponse } from "@depotakip/shared";
+import type { PaginatedResponse } from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export interface AuditEntry {

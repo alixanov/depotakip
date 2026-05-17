@@ -1,4 +1,4 @@
-import type { Category, CreateCategoryInput, UpdateCategoryInput } from "@depotakip/shared";
+import type { Category, CreateCategoryInput, UpdateCategoryInput } from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export const categoriesApi = {

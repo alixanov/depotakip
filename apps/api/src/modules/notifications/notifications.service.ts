@@ -3,7 +3,7 @@ import type {
   NotificationChannel,
   NotificationLanguage,
   NotificationTemplateKey,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { logger } from "../../lib/logger.js";
 import { env } from "../../config/env.js";
 import { paginate, tenantFilter } from "../../lib/repository.js";

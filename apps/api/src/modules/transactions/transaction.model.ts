@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { Currency, PaymentMethod, TransactionKind } from "@depotakip/shared";
+import type { Currency, PaymentMethod, TransactionKind } from "@sadiyakargo/shared";
 
 export interface TransactionDoc extends Document {
   _id: Types.ObjectId;

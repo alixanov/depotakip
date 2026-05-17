@@ -1,9 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import { BarChart3, Coins, FileBarChart, Menu, Package, Truck, Warehouse } from "lucide-react";
+import {
+  BarChart3,
+  Coins,
+  FileBarChart,
+  LogOut,
+  Menu,
+  Package,
+  Truck,
+  Warehouse,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuthStore } from "@/stores/auth";
+import { useLogout } from "@/lib/useLogout";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,6 +28,8 @@ import { cn } from "@/lib/utils";
 export function MobileBottomNav() {
   const user = useAuthStore((s) => s.user);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const logout = useLogout();
   const { t } = useTranslation();
   if (!user) return null;
 
@@ -100,10 +113,38 @@ export function MobileBottomNav() {
               <DrawerLink to="/profile" onClose={close} icon={<Package />}>
                 {t("profile")}
               </DrawerLink>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    setLogoutOpen(true);
+                  }}
+                  className="flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-destructive hover:bg-destructive/10"
+                >
+                  <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">
+                    <LogOut />
+                  </span>
+                  {t("logout")}
+                </button>
+              </li>
             </ul>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title={t("auth:logoutAria")}
+        description={t("auth:logoutConfirm")}
+        confirmLabel={t("logout")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => {
+          setLogoutOpen(false);
+          void logout();
+        }}
+      />
     </>
   );
 }

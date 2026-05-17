@@ -1,6 +1,6 @@
 import request from "supertest";
 import { Types } from "mongoose";
-import type { Role } from "@depotakip/shared";
+import type { Role } from "@sadiyakargo/shared";
 import { createApp } from "../src/app.ts";
 import { env } from "../src/config/env.ts";
 import { hash } from "../src/lib/password.ts";

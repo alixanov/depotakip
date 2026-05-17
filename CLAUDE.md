@@ -16,10 +16,10 @@ npm workspaces, three packages:
 
 ```
 apps/
-├── web/    @depotakip/web    Vite 6 + React 19.2 + React Compiler + TS strict
-└── api/    @depotakip/api    Express 5 + Mongoose 8 + JWT + pino + zod (TS)
+├── web/    @sadiyakargo/web    Vite 6 + React 19.2 + React Compiler + TS strict
+└── api/    @sadiyakargo/api    Express 5 + Mongoose 8 + JWT + pino + zod (TS)
 packages/
-└── shared/ @depotakip/shared zod schemas + TS types + domain constants
+└── shared/ @sadiyakargo/shared zod schemas + TS types + domain constants
 ```
 
 Root is `"type": "module"`. There is **one** `package-lock.json` in the repo root —
@@ -105,7 +105,7 @@ apps/api/src/
   `userId` where the resource is per-user.
 - **Roles:** `admin` / `operator` / `viewer`. Admin = full. Operator = CRUD on operations,
   no user management. Viewer = read-only, optionally no financial figures.
-- **Validation happens in middleware** via zod schemas from `@depotakip/shared`. Controllers
+- **Validation happens in middleware** via zod schemas from `@sadiyakargo/shared`. Controllers
   receive already-parsed `req.body` / `req.params` / `req.query` and never re-check shape.
 - **Errors throw `AppError` or its factory wrappers** from `lib/errors.ts`. The central
   middleware maps mongoose CastError → 400, ValidationError → 422, duplicate-key → 409.
@@ -181,14 +181,14 @@ apps/web/src/
   cache with `qc.setQueryData` (no full refetch) and invalidates sibling queries
   cross-feature when needed.
 - **Client/UI state lives in Zustand or `useState`.** Don't put form drafts into Query cache.
-- **Forms use react-hook-form + zodResolver** with schemas from `@depotakip/shared`.
+- **Forms use react-hook-form + zodResolver** with schemas from `@sadiyakargo/shared`.
 - **All requests go through `lib/api/client.ts`.** It auto-attaches the access token from
   Zustand, sets `Idempotency-Key` when supplied, unwraps `{ error, code, fields }` into
   `ApiError`, and on 401 clears the auth store.
 - **Theme values come from `styles.css` CSS variables** (shadcn pattern: `bg-primary`,
   `text-foreground`, etc.). No literal hex colours in new components.
-- **Status colours come from `STATUS_LABELS` in `@depotakip/shared`**; do not duplicate.
-- **Path imports use `@/` for `src/`**. Workspace deps via `@depotakip/shared` resolve
+- **Status colours come from `STATUS_LABELS` in `@sadiyakargo/shared`**; do not duplicate.
+- **Path imports use `@/` for `src/`**. Workspace deps via `@sadiyakargo/shared` resolve
   through the symlink with bundler resolution.
 - **Icons:** `lucide-react` only. No emoji in production code (the spec calls for an
   icon library; emoji can stay for placeholder text but not as primary UI).

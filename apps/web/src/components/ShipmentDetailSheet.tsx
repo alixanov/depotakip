@@ -11,8 +11,8 @@ import {
   Truck,
   User,
 } from "lucide-react";
-import type { Status } from "@depotakip/shared";
-import { STATUS_TONE } from "@depotakip/shared";
+import type { Status } from "@sadiyakargo/shared";
+import { STATUS_TONE } from "@sadiyakargo/shared";
 import { ShipmentStatusChanger } from "./ShipmentStatusChanger";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";

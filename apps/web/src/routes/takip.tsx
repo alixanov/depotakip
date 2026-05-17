@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { STATUSES, type Shipment, type Status } from "@depotakip/shared";
+import { STATUSES, type Shipment, type Status } from "@sadiyakargo/shared";
 import { AlertTriangle, Download, Package, Truck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";

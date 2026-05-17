@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import mongoose, { Types } from "mongoose";
-import type { CreateShipmentInput, Status } from "@depotakip/shared";
+import type { CreateShipmentInput, Status } from "@sadiyakargo/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { paginate, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "../carriers/carrier.model.js";

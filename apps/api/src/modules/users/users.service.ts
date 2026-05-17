@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Types } from "mongoose";
-import type { CreateUserInput, UpdateUserInput, PaginatedResponse } from "@depotakip/shared";
+import type { CreateUserInput, UpdateUserInput, PaginatedResponse } from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { hash } from "../../lib/password.js";
 import { sendMail } from "../../lib/mailer.js";

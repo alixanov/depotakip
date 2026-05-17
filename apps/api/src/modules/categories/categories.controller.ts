@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateCategoryInput, UpdateCategoryInput } from "@depotakip/shared";
+import type { CreateCategoryInput, UpdateCategoryInput } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./categories.service.js";

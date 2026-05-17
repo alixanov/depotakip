@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import type { CreateCarrierInput, UpdateCarrierInput } from "@depotakip/shared";
+import type { CreateCarrierInput, UpdateCarrierInput } from "@sadiyakargo/shared";
 import { notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "./carrier.model.js";

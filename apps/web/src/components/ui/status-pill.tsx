@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import type { LotStatus, Status, StatusTone } from "@depotakip/shared";
-import { LOT_STATUS_TONE, STATUS_TONE } from "@depotakip/shared";
+import type { LotStatus, Status, StatusTone } from "@sadiyakargo/shared";
+import { LOT_STATUS_TONE, STATUS_TONE } from "@sadiyakargo/shared";
 import { cn } from "@/lib/utils";
 
 /** Dark-theme aware tone → Tailwind classes. */

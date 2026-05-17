@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createCarrierSchema, idParamSchema, updateCarrierSchema } from "@depotakip/shared";
+import { createCarrierSchema, idParamSchema, updateCarrierSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./carriers.controller.js";

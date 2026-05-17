@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { Currency } from "@depotakip/shared";
+import type { Currency } from "@sadiyakargo/shared";
 
 export interface ExchangeRateDoc extends Document {
   _id: Types.ObjectId;

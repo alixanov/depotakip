@@ -28,7 +28,7 @@ import { requireAuth } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
 import { formatDate, formatUsdCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Shipment, Status } from "@depotakip/shared";
+import type { Shipment, Status } from "@sadiyakargo/shared";
 
 export const Route = createFileRoute("/")({
   beforeLoad: requireAuth,

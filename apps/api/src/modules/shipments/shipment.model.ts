@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { Currency, Status } from "@depotakip/shared";
+import type { Currency, Status } from "@sadiyakargo/shared";
 
 interface Money {
   amount: number;

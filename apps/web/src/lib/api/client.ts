@@ -1,4 +1,4 @@
-import type { ApiErrorBody } from "@depotakip/shared";
+import type { ApiErrorBody } from "@sadiyakargo/shared";
 import { API_BASE } from "@/lib/env";
 import { useAuthStore } from "@/stores/auth";
 

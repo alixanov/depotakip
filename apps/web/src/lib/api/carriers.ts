@@ -3,7 +3,7 @@ import type {
   CreateCarrierInput,
   PaginatedResponse,
   UpdateCarrierInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export const carriersApi = {

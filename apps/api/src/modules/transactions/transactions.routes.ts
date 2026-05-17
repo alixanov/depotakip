@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createTransactionSchema, idParamSchema } from "@depotakip/shared";
+import { createTransactionSchema, idParamSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { idempotency } from "../../middleware/idempotency.js";

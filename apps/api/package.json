@@ -1,5 +1,5 @@
 {
-  "name": "@depotakip/api",
+  "name": "@sadiyakargo/api",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -18,8 +18,8 @@
     "migrate:create": "migrate-mongo create -f migrate-mongo-config.cjs"
   },
   "dependencies": {
-    "@depotakip/pdf-templates": "*",
-    "@depotakip/shared": "*",
+    "@sadiyakargo/pdf-templates": "*",
+    "@sadiyakargo/shared": "*",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.34.0",
     "cookie-parser": "^1.4.7",

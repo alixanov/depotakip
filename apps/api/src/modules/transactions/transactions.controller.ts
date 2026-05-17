@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateTransactionInput, TransactionKind } from "@depotakip/shared";
+import type { CreateTransactionInput, TransactionKind } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./transactions.service.js";

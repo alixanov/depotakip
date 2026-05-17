@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateSenderInput, UpdateSenderInput } from "@depotakip/shared";
+import type { CreateSenderInput, UpdateSenderInput } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./senders.service.js";

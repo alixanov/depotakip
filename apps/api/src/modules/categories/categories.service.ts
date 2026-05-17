@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import type { CreateCategoryInput, UpdateCategoryInput } from "@depotakip/shared";
+import type { CreateCategoryInput, UpdateCategoryInput } from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Category } from "./category.model.js";

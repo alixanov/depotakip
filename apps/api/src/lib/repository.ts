@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Types, type FilterQuery, type Model } from "mongoose";
-import type { PaginatedResponse } from "@depotakip/shared";
+import type { PaginatedResponse } from "@sadiyakargo/shared";
 
 /** Build a tenant filter that excludes soft-deleted documents. */
 export function tenantFilter(orgId: string, extra?: Record<string, unknown>): FilterQuery<any> {

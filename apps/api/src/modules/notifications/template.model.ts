@@ -3,7 +3,7 @@ import type {
   NotificationChannel,
   NotificationLanguage,
   NotificationTemplateKey,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 
 export interface TemplateDoc extends Document {
   _id: Types.ObjectId;

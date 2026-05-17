@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { Role } from "@depotakip/shared";
+import type { Role } from "@sadiyakargo/shared";
 
 export interface UserDoc extends Document {
   _id: Types.ObjectId;

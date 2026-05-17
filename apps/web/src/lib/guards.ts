@@ -1,5 +1,5 @@
 import { redirect } from "@tanstack/react-router";
-import type { Role } from "@depotakip/shared";
+import type { Role } from "@sadiyakargo/shared";
 import { useAuthStore } from "@/stores/auth";
 
 interface GuardCtx {

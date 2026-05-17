@@ -1,4 +1,4 @@
-import type { CreateExchangeRateInput, Currency, ExchangeRate } from "@depotakip/shared";
+import type { CreateExchangeRateInput, Currency, ExchangeRate } from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export const exchangeRatesApi = {

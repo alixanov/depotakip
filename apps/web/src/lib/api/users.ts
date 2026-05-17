@@ -1,4 +1,9 @@
-import type { CreateUserInput, PaginatedResponse, UpdateUserInput, User } from "@depotakip/shared";
+import type {
+  CreateUserInput,
+  PaginatedResponse,
+  UpdateUserInput,
+  User,
+} from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export interface CreateUserResponse {

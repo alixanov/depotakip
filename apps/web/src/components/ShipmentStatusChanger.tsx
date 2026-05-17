@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { STATUSES, type Shipment, type Status } from "@depotakip/shared";
+import { STATUSES, type Shipment, type Status } from "@sadiyakargo/shared";
 import { Button } from "@/components/ui/button";
 import { shipmentsApi } from "@/lib/api/shipments";
 import { ApiError } from "@/lib/api/client";

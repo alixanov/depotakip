@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { NotificationChannel, NotificationTemplateKey } from "@depotakip/shared";
+import type { NotificationChannel, NotificationTemplateKey } from "@sadiyakargo/shared";
 
 export type LogStatus = "queued" | "sent" | "failed";
 

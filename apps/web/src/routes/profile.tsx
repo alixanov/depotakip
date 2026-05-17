@@ -2,16 +2,19 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { changePasswordSchema, type ChangePasswordInput } from "@depotakip/shared";
+import { changePasswordSchema, type ChangePasswordInput } from "@sadiyakargo/shared";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FieldError, FormError } from "@/components/ui/form-error";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { authApi } from "@/lib/api/auth";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
+import { useLogout } from "@/lib/useLogout";
 import { requireAuth } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
 
@@ -23,6 +26,8 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const [serverError, setServerError] = useState("");
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const logout = useLogout();
   const { t } = useTranslation();
 
   const form = useForm<ChangePasswordInput>({
@@ -96,6 +101,32 @@ function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+          <div>
+            <p className="text-sm font-semibold">{t("auth:logoutAria")}</p>
+            <p className="text-xs text-muted-foreground">{t("auth:logoutConfirm")}</p>
+          </div>
+          <Button variant="outline" onClick={() => setLogoutOpen(true)}>
+            <LogOut className="h-4 w-4" />
+            {t("logout")}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title={t("auth:logoutAria")}
+        description={t("auth:logoutConfirm")}
+        confirmLabel={t("logout")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => {
+          setLogoutOpen(false);
+          void logout();
+        }}
+      />
     </div>
   );
 }

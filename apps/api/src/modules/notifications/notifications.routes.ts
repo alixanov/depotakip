@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createTemplateSchema, idParamSchema, updateTemplateSchema } from "@depotakip/shared";
+import { createTemplateSchema, idParamSchema, updateTemplateSchema } from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./notifications.controller.js";

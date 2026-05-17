@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { createSenderSchema, type CreateSenderInput, type Sender } from "@depotakip/shared";
+import { createSenderSchema, type CreateSenderInput, type Sender } from "@sadiyakargo/shared";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { forgotPasswordSchema, type ForgotPasswordInput } from "@depotakip/shared";
+import { forgotPasswordSchema, type ForgotPasswordInput } from "@sadiyakargo/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

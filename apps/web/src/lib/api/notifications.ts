@@ -3,7 +3,7 @@ import type {
   NotificationTemplateKey,
   PaginatedResponse,
   UpdateTemplateInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { request } from "./client";
 
 export interface TemplateRow {

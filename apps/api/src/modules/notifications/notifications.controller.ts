@@ -3,7 +3,7 @@ import type {
   CreateTemplateInput,
   NotificationTemplateKey,
   UpdateTemplateInput,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./templates.service.js";

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import type { CreateExchangeRateInput, Currency } from "@depotakip/shared";
+import type { CreateExchangeRateInput, Currency } from "@sadiyakargo/shared";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import * as service from "./exchangeRates.service.js";
 

@@ -11,7 +11,7 @@ import {
   type CreateTransactionInput,
   type Transaction,
   type TransactionKind,
-} from "@depotakip/shared";
+} from "@sadiyakargo/shared";
 import { Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

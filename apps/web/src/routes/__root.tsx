@@ -23,7 +23,6 @@ import { BrandMark } from "@/components/BrandMark";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Avatar } from "@/components/ui/avatar";
-import { Tooltip } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +34,7 @@ import {
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/stores/auth";
+import { useLogout } from "@/lib/useLogout";
 import { useRealtimeInvalidations } from "@/lib/realtime";
 import { CommandPalette } from "@/components/CommandPalette";
 import { LanguageSwitcher, OfflineBanner, ThemeToggle } from "@/components/HeaderControls";
@@ -67,6 +67,7 @@ function AppLayout() {
   const { t } = useTranslation();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const logout = useLogout();
 
   useRealtimeInvalidations();
 
@@ -94,14 +95,8 @@ function AppLayout() {
   }, [user, navigate]);
 
   async function performLogout() {
-    try {
-      await authApi.logout();
-    } catch {
-      // ignore — local clear is what matters
-    }
-    clear();
     setLogoutOpen(false);
-    navigate({ to: "/login" });
+    await logout();
   }
 
   return (
@@ -332,17 +327,16 @@ function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Tooltip content={user.fullName} side="bottom">
-          <button
-            className="flex h-9 items-center gap-2 rounded-full p-0.5 pr-2 transition-colors hover:bg-muted data-[state=open]:bg-muted"
-            aria-label={user.fullName}
-          >
-            <Avatar name={user.fullName} size="sm" />
-            <span className="hidden text-xs font-semibold lg:inline">
-              {user.fullName.split(" ")[0]}
-            </span>
-          </button>
-        </Tooltip>
+        <button
+          type="button"
+          className="flex h-9 items-center gap-2 rounded-full p-0.5 pr-2 transition-colors hover:bg-muted data-[state=open]:bg-muted"
+          aria-label={user.fullName}
+        >
+          <Avatar name={user.fullName} size="sm" />
+          <span className="hidden text-xs font-semibold lg:inline">
+            {user.fullName.split(" ")[0]}
+          </span>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <div className="flex items-center gap-3 px-2 py-2">

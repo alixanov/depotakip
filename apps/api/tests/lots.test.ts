@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { app, apiPath, authHeader, loginAs, request } from "./helpers.ts";
-import type { Role } from "@depotakip/shared";
+import type { Role } from "@sadiyakargo/shared";
 
 interface SeedResult {
   token: string;
