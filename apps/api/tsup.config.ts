@@ -9,6 +9,7 @@ export default defineConfig({
   sourcemap: false,
   splitting: false,
   bundle: true,
-  noExternal: ["@sadiyakargo/shared"],
+  noExternal: ["@sadiyakargo/shared", "@sadiyakargo/pdf-templates"],
   external: ["bullmq"],
+  loader: { ".tsx": "tsx" },
 });
