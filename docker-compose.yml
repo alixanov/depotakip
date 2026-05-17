@@ -1,9 +1,9 @@
-name: depotakip
+name: sadiyakargo
 
 services:
   mongo:
     image: mongo:7.0
-    container_name: depotakip-mongo
+    container_name: sadiyakargo-mongo
     command:
       - mongod
       - --replSet=rs0
@@ -24,7 +24,7 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    container_name: depotakip-redis
+    container_name: sadiyakargo-redis
     ports:
       - "6379:6379"
     command:
@@ -40,7 +40,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: depotakip-minio
+    container_name: sadiyakargo-minio
     command:
       - server
       - /data
@@ -61,7 +61,7 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    container_name: depotakip-minio-init
+    container_name: sadiyakargo-minio-init
     depends_on:
       minio:
         condition: service_healthy
@@ -70,8 +70,8 @@ services:
       - -c
       - |
         mc alias set local http://minio:9000 minio minio12345 &&
-        mc mb --ignore-existing local/depotakip-photos &&
-        mc anonymous set download local/depotakip-photos &&
+        mc mb --ignore-existing local/sadiyakargo-photos &&
+        mc anonymous set download local/sadiyakargo-photos &&
         echo "minio bucket ready"
     restart: "no"
 

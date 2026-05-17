@@ -19,7 +19,7 @@ if (fs.existsSync(envPath)) {
 
 module.exports = {
   mongodb: {
-    url: process.env.MONGODB_URI || "mongodb://localhost:27017/depotakip",
+    url: process.env.MONGODB_URI || "mongodb://localhost:27017/sadiyakargo",
     options: {},
   },
   migrationsDir: "migrations",

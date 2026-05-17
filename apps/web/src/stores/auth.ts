@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
       clear: () => set({ user: null, accessToken: null }),
     }),
     {
-      name: "depotakip-auth",
+      name: "sadiyakargo-auth",
       // Don't persist accessToken — keep it in memory only. Refresh cookie
       // brings the user back in via /auth/refresh after a hard reload.
       partialize: (s) => ({ user: s.user }),

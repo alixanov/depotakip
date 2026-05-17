@@ -8,7 +8,7 @@ const resources = { tr, ru, uz } as const;
 
 export type AppLocale = "tr" | "ru" | "uz";
 
-const STORAGE_KEY = "depotakip_lang";
+const STORAGE_KEY = "sadiyakargo_lang";
 const fallback: AppLocale = "tr";
 
 function readInitialLanguage(): AppLocale {

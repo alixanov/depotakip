@@ -2,7 +2,7 @@ import type { CookieOptions } from "express";
 import { env } from "../config/env.js";
 import { parseDuration } from "./duration.js";
 
-export const REFRESH_COOKIE = "depotakip_refresh";
+export const REFRESH_COOKIE = "sadiyakargo_refresh";
 
 export function refreshCookieOptions(): CookieOptions {
   return {

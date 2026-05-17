@@ -9,7 +9,7 @@ This README only documents how to run the codebase; the spec drives the roadmap.
 ## Workspaces
 
 ```
-depotakip/
+sadiyakargo/
 ├── apps/
 │   ├── web/    @sadiyakargo/web    Vite 6 + React 19 + React Compiler + Tailwind 4 + shadcn/ui
 │   │                             + TanStack Router + TanStack Query + Zustand + react-hook-form
@@ -30,7 +30,7 @@ depotakip/
 ## Setup
 
 ```bash
-git clone <repo> && cd depotakip
+git clone <repo> && cd sadiyakargo
 npm install                      # installs deps for all workspaces
 
 cp apps/api/.env.example apps/api/.env

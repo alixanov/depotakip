@@ -27,7 +27,7 @@ export const useUiStore = create<UiState>()(
         get().setTheme(next);
       },
     }),
-    { name: "depotakip-ui" }
+    { name: "sadiyakargo-ui" }
   )
 );
 
