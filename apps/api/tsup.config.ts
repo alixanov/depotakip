@@ -1,3 +1,4 @@
+// Bundle entry: src/server.ts -> dist/server.cjs for Node 22 production.
 import { defineConfig } from "tsup";
 
 export default defineConfig({
