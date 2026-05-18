@@ -7,6 +7,7 @@ export interface CarrierDoc extends Document {
   lastName: string;
   phone: string;
   telegramChatId: number | null;
+  telegramUsername: string | null;
   deliveryAddressTr: string;
   notes: string;
   deletedAt?: Date | null;
@@ -18,6 +19,7 @@ export interface CarrierDoc extends Document {
     lastName: string;
     phone: string;
     telegramChatId: number | null;
+    telegramUsername: string | null;
     deliveryAddressTr: string;
     notes: string;
     createdAt: string;
@@ -29,9 +31,12 @@ const carrierSchema = new Schema<CarrierDoc>(
   {
     orgId: { type: Schema.Types.ObjectId, required: true, index: true },
     firstName: { type: String, required: true, trim: true },
-    lastName: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    // lastName и phone опциональны — некоторые перевозчики ходят только
+    // по имени/прозвищу или связь через Telegram без номера.
+    lastName: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true },
     telegramChatId: { type: Number, default: null },
+    telegramUsername: { type: String, default: null, trim: true },
     deliveryAddressTr: { type: String, default: "", trim: true },
     notes: { type: String, default: "", trim: true },
     deletedAt: { type: Date, default: null },
@@ -48,6 +53,7 @@ carrierSchema.methods.toClient = function toClient() {
     lastName: this.lastName,
     phone: this.phone,
     telegramChatId: this.telegramChatId,
+    telegramUsername: this.telegramUsername ?? null,
     deliveryAddressTr: this.deliveryAddressTr,
     notes: this.notes,
     createdAt: this.createdAt.toISOString(),

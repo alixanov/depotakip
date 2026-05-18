@@ -7,7 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 import "./lib/i18n";
+import { installZodI18n } from "./lib/zod-i18n";
 import { applyTheme, useUiStore } from "./stores/ui";
+
+// Глобальный zod errorMap должен встать ДО первого render: любая форма
+// с zodResolver получит локализованные сообщения (дефолтные "Expected
+// number, received nan" + наши validation:* ключи из shared/local schemas).
+installZodI18n();
 
 applyTheme(useUiStore.getState().theme);
 

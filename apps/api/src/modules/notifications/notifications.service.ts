@@ -84,11 +84,20 @@ export async function enqueue(input: EnqueueInput): Promise<string | null> {
 
   const queue = getQueue();
   if (queue) {
-    await queue.add(
-      "send",
-      { logId: log._id.toString() },
-      { attempts: MAX_ATTEMPTS, backoff: { type: "exponential", delay: BACKOFF_SEC[0] * 1000 } }
-    );
+    // attempts:1 — BullMQ исполняет один проход; ретраи делает processOne
+    // через manual re-enqueue с backoff (см. ниже), потому что throttle
+    // зависит от log.attempts, а не от количества запусков BullMQ.
+    // try/catch — Redis-сбой не должен валить основной запрос
+    // (PATCH /shipments/:id/status и т.п.). Лог остаётся в "queued";
+    // оператор увидит в /admin/notifications, ручной retry — через UI.
+    try {
+      await queue.add("send", { logId: log._id.toString() }, { attempts: 1 });
+    } catch (err) {
+      logger.error(
+        { err, logId: log._id.toString(), templateKey: input.templateKey },
+        "notification_enqueue_failed"
+      );
+    }
   } else {
     // No Redis — process synchronously (dev / tests / first run).
     await processOne(log._id.toString());
@@ -98,9 +107,15 @@ export async function enqueue(input: EnqueueInput): Promise<string | null> {
 
 /** Worker handler: load log, dispatch via adapter, mark sent/failed. */
 export async function processOne(logId: string): Promise<void> {
-  const log = await NotificationLog.findById(logId);
+  // Атомарный инкремент: если сам log.save() в конце упадёт (Mongo blip,
+  // version conflict), attempts всё равно зафиксирован, и BullMQ-retry не
+  // отправит сообщение второй раз сверх лимита.
+  const log = await NotificationLog.findOneAndUpdate(
+    { _id: logId },
+    { $inc: { attempts: 1 } },
+    { new: true }
+  );
   if (!log) return;
-  log.attempts += 1;
   try {
     if (log.channel === "telegram" && log.recipientRef.chatId) {
       const res = await sendTelegram({
@@ -123,11 +138,21 @@ export async function processOne(logId: string): Promise<void> {
       const queue = getQueue();
       if (queue) {
         const delay = BACKOFF_SEC[Math.min(log.attempts, BACKOFF_SEC.length - 1)] * 1000;
-        await queue.add("send", { logId }, { delay, attempts: 1 });
+        try {
+          await queue.add("send", { logId }, { delay, attempts: 1 });
+        } catch (enqErr) {
+          logger.error({ err: enqErr, logId }, "notification_reenqueue_failed");
+        }
       }
     }
   }
-  await log.save();
+  try {
+    await log.save();
+  } catch (saveErr) {
+    // attempts уже инкрементирован выше через атомарный $inc, остальные поля
+    // (status/sentAt/error) описывают одну попытку — потеря допустима.
+    logger.error({ err: saveErr, logId, status: log.status }, "notification_log_save_failed");
+  }
 }
 
 /** Tests/operators may want to force-process the in-memory queue. */

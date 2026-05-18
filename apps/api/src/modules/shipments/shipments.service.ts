@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import mongoose, { Types } from "mongoose";
 import type { CreateShipmentInput, Status } from "@sadiyakargo/shared";
+import { env } from "../../config/env.js";
 import { badRequest, conflict, notFound } from "../../lib/errors.js";
 import { paginate, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "../carriers/carrier.model.js";
@@ -57,7 +58,7 @@ export async function list(orgId: string, query: ListQuery) {
 
 export async function get(orgId: string, id: string) {
   const doc = await Shipment.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Gönderi bulunamadı");
+  if (!doc) throw notFound("err:shipment_not_found");
   return doc.toClient();
 }
 
@@ -75,7 +76,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
   const carrier = await Carrier.findOne(
     tenantFilter(orgId, { _id: new Types.ObjectId(input.carrierId) })
   );
-  if (!carrier) throw badRequest("Kargocu bulunamadı");
+  if (!carrier) throw badRequest("err:carrier_not_found");
 
   const session = await mongoose.startSession();
   try {
@@ -102,15 +103,11 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
           { new: true, session }
         );
         if (!updated) {
-          throw conflict(`Yetersiz stok: parti ${item.lotId} (istenen ${item.qty})`);
+          throw conflict("err:insufficient_stock", { lotId: item.lotId, qty: item.qty });
         }
         lotSenderMap.set(item.lotId, updated.senderId.toString());
         const newStatus = updated.qtyAvailable === 0 ? "fully_shipped" : "partially_shipped";
-        await InboundLot.updateOne(
-          { _id: lotId, session },
-          { $set: { status: newStatus } },
-          { session }
-        );
+        await InboundLot.updateOne({ _id: lotId }, { $set: { status: newStatus } }, { session });
       }
 
       // 2. mint shortCode
@@ -210,7 +207,7 @@ export async function updateStatus(
   comment: string
 ) {
   const doc = await Shipment.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Gönderi bulunamadı");
+  if (!doc) throw notFound("err:shipment_not_found");
   if (doc.status === toStatus) return doc.toClient();
 
   const fromStatus = doc.status;
@@ -221,11 +218,26 @@ export async function updateStatus(
     try {
       await session.withTransaction(async () => {
         for (const item of doc.items) {
-          await InboundLot.updateOne(
+          // $inc + капчуим обновлённый lot, чтобы вычислить корректный статус.
+          // Безусловный $set: "in_stock" был багом: если лот участвует ещё в
+          // активном шипменте, после возврата qty статус всё равно должен
+          // быть "partially_shipped" (qtyAvailable < qtyIn), а не "in_stock".
+          const updated = await InboundLot.findOneAndUpdate(
             { _id: item.lotId, orgId: doc.orgId },
-            { $inc: { qtyAvailable: item.qty }, $set: { status: "in_stock" } },
-            { session }
+            { $inc: { qtyAvailable: item.qty } },
+            { new: true, session }
           );
+          if (updated) {
+            const newStatus =
+              updated.qtyAvailable >= updated.qtyIn ? "in_stock" : "partially_shipped";
+            if (updated.status !== newStatus) {
+              await InboundLot.updateOne(
+                { _id: item.lotId },
+                { $set: { status: newStatus } },
+                { session }
+              );
+            }
+          }
         }
 
         const originals = await Transaction.find({ shipmentId: doc._id }, null, { session });
@@ -281,7 +293,7 @@ export async function updateStatus(
   // Enqueue notifications for carrier + every distinct sender attached to lots.
   const tplKey = STATUS_TO_TEMPLATE[toStatus];
   if (tplKey) {
-    const trackingUrl = `${(await import("../../config/env.js")).env.WEB_BASE_URL}/track/${doc.publicTrackingToken}`;
+    const trackingUrl = `${env.WEB_BASE_URL}/track/${doc.publicTrackingToken}`;
     const vars: Record<string, unknown> = {
       shortCode: doc.shortCode,
       recipientName: doc.recipient?.name || "",
@@ -340,11 +352,15 @@ const STATUS_TO_TEMPLATE: Partial<
 
 export async function findByTrackingToken(token: string) {
   const doc = await Shipment.findOne({ publicTrackingToken: token, deletedAt: null });
-  if (!doc) throw notFound("Takip kodu geçersiz");
+  if (!doc) throw notFound("err:tracking_token_invalid");
   return doc.toPublicJSON();
 }
 
-/** Resets all counters — used in tests only. */
+/** Resets all counters — used in tests only. Защита от случайного вызова
+ *  из контроллера/middleware в проде (выпил счётчиков → коллизии shortCode). */
 export async function _resetCounters() {
+  if (env.NODE_ENV !== "test") {
+    throw new Error("_resetCounters is test-only — guarded by NODE_ENV");
+  }
   await Counter.deleteMany({});
 }

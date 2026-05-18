@@ -57,7 +57,7 @@ export function PhotoGalleryLightbox({
 
   const current = photos[index];
 
-  // Presigned URL is short-lived (TZ §9: 1h). staleTime sits just under so we
+  // Presigned URL is short-lived (1h by default). staleTime sits just under so we
   // don't re-request URLs while the user pages through.
   const urlQuery = useQuery({
     enabled: open && !!current,

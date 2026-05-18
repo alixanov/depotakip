@@ -1,12 +1,11 @@
 import type { Request, Response } from "express";
 import type { CreateTransactionInput, TransactionKind } from "@sadiyakargo/shared";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import * as service from "./transactions.service.js";
 
 type IdParams = { id: string };
 
-export const list = asyncHandler(async (req: Request, res: Response) => {
+export const list = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   const q = req.query as Record<string, string | undefined>;
   res.json(
@@ -22,26 +21,26 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       sort: q.sort,
     })
   );
-});
+};
 
-export const get = asyncHandler<IdParams>(async (req, res) => {
+export const get = async (req: Request<IdParams>, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.get(req.orgId, req.params.id));
-});
+};
 
-export const create = asyncHandler(async (req: Request, res: Response) => {
+export const create = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   res
     .status(201)
     .json(await service.registerPayment(req.orgId, req.body as CreateTransactionInput));
-});
+};
 
-export const carrierBalances = asyncHandler(async (req: Request, res: Response) => {
+export const carrierBalances = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.carrierBalances(req.orgId));
-});
+};
 
-export const senderBalances = asyncHandler(async (req: Request, res: Response) => {
+export const senderBalances = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.senderBalances(req.orgId));
-});
+};

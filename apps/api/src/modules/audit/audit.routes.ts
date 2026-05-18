@@ -3,7 +3,6 @@ import { Types } from "mongoose";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
 import { AuditLog } from "./audit.model.js";
 
@@ -36,7 +35,7 @@ router.get(
   "/",
   requirePermission("audit:read"),
   validate({ query: querySchema }),
-  asyncHandler(async (req, res) => {
+  async (req, res) => {
     if (!req.orgId) throw unauthorized();
     const q = req.query as unknown as {
       page?: number;
@@ -102,7 +101,7 @@ router.get(
       })),
       pagination: { page, limit, total, hasMore: page * limit < total },
     });
-  })
+  }
 );
 
 export default router;

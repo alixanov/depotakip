@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type Sender } from "@sadiyakargo/shared";
-import { Plus, Trash2 } from "lucide-react";
+import { FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { DataTable, PaginationBar, type Column } from "@/components/ui/data-tabl
 import { EmptyState } from "@/components/ui/empty-state";
 import { Users } from "lucide-react";
 import { SenderFormDialog } from "@/components/SenderFormDialog";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { sendersApi } from "@/lib/api/senders";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requirePermission } from "@/lib/guards";
@@ -28,6 +29,8 @@ function SendersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing] = useState<Sender | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { t } = useTranslation();
 
@@ -49,7 +52,26 @@ function SendersPage() {
       header: t("admin:col_name"),
       cell: (s) => <span className="font-medium">{s.fullName}</span>,
     },
-    { key: "phone", header: t("admin:col_phone"), cell: (s) => s.phone },
+    {
+      key: "phone",
+      header: t("admin:col_phone"),
+      cell: (s) => (
+        <div className="leading-tight">
+          <div className={s.phone ? "tabular-nums" : "text-muted-foreground"}>{s.phone || "—"}</div>
+          {s.telegramUsername && (
+            <a
+              href={`https://t.me/${s.telegramUsername}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-primary hover:underline"
+            >
+              @{s.telegramUsername}
+            </a>
+          )}
+        </div>
+      ),
+    },
     { key: "address", header: t("admin:col_address"), cell: (s) => s.address || "—" },
     {
       key: "isSelf",
@@ -67,18 +89,24 @@ function SendersPage() {
     {
       key: "actions",
       header: "",
-      cell: (s) =>
-        canDelete ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setConfirmId(s.id)}
-            aria-label={t("delete")}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
+      cell: (s) => (
+        <div className="flex justify-end gap-0.5">
+          <Button variant="ghost" size="icon" onClick={() => setEditing(s)} aria-label={t("edit")}>
+            <Pencil className="h-4 w-4" />
           </Button>
-        ) : null,
-      width: "60px",
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setConfirmId(s.id)}
+              aria-label={t("delete")}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
+      ),
+      width: "96px",
       className: "text-right",
     },
   ];
@@ -97,6 +125,10 @@ function SendersPage() {
             }}
             className="w-56"
           />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-1 h-4 w-4" />
+            {t("import:btn")}
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
             {t("add")}
@@ -123,21 +155,44 @@ function SendersPage() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{s.phone}</p>
+                  {s.phone && (
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{s.phone}</p>
+                  )}
+                  {s.telegramUsername && (
+                    <a
+                      href={`https://t.me/${s.telegramUsername}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 inline-block text-xs text-primary hover:underline"
+                    >
+                      @{s.telegramUsername}
+                    </a>
+                  )}
                   {s.address && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.address}</p>
                   )}
                 </div>
-                {canDelete && (
+                <div className="flex shrink-0 items-start gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setConfirmId(s.id)}
-                    aria-label={t("delete")}
+                    onClick={() => setEditing(s)}
+                    aria-label={t("edit")}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Pencil className="h-4 w-4" />
                   </Button>
-                )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setConfirmId(s.id)}
+                      aria-label={t("delete")}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             empty={
@@ -157,7 +212,25 @@ function SendersPage() {
         </CardContent>
       </Card>
 
-      <SenderFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SenderFormDialog
+        open={dialogOpen || !!editing}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialogOpen(false);
+            setEditing(null);
+          }
+        }}
+        sender={editing ?? undefined}
+      />
+
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        importFn={(file, onDup) => sendersApi.bulkImport(file, onDup)}
+        templateUrl={sendersApi.importTemplateUrl()}
+        invalidateKey="senders"
+        title={t("import:title_senders")}
+      />
 
       <ConfirmDialog
         open={!!confirmId}

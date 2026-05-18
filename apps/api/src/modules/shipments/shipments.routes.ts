@@ -16,9 +16,19 @@ import { waybillPdf } from "./waybill.controller.js";
 const router = Router();
 router.use(requireAuth);
 
-router.get("/", controller.list);
-router.get("/:id/waybill.pdf", validate({ params: idParamSchema }), waybillPdf);
-router.get("/:id", validate({ params: idParamSchema }), controller.get);
+router.get("/", requirePermission("shipments:read"), controller.list);
+router.get(
+  "/:id/waybill.pdf",
+  requirePermission("shipments:read"),
+  validate({ params: idParamSchema }),
+  waybillPdf
+);
+router.get(
+  "/:id",
+  requirePermission("shipments:read"),
+  validate({ params: idParamSchema }),
+  controller.get
+);
 router.post(
   "/",
   requirePermission("shipments:write"),

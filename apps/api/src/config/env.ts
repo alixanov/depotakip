@@ -55,6 +55,11 @@ const envSchema = z.object({
   // synchronous in-process processing (no queue persistence).
   REDIS_URL: z.string().optional(),
 
+  // Параллельность BullMQ воркера для notifications. 1 — потолок для
+  // типичной нагрузки (≤10 уведомлений/час). Поднимать при массовых
+  // рассылках или bulk-смене статусов. Игнорируется, если REDIS_URL пуст.
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
+
   // Telegram bot — leave token empty to log payloads instead of sending.
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_USERNAME: z.string().optional(),
@@ -83,14 +88,15 @@ const envSchema = z.object({
     .transform((v) => v !== "false")
     .default("true"),
 
-  // Lot photo limits — TZ §15 caps at 10 photos / 10 MB per lot.
+  // Lot photo limits — defaults: 10 photos × 10 MB per lot.
   LOT_PHOTO_MAX_BYTES: z.coerce
     .number()
     .int()
     .positive()
     .default(10 * 1024 * 1024),
   LOT_PHOTO_MAX_COUNT: z.coerce.number().int().positive().default(10),
-  // Presigned GET URL TTL — TZ §9 mandates 1 hour.
+  // Presigned GET URL TTL — 1 hour. Don't raise without security review
+  // (longer TTL widens the replay window for leaked URLs).
   LOT_PHOTO_PRESIGNED_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
   // Branding — used as the org name printed on every PDF document

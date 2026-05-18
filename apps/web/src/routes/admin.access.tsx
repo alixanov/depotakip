@@ -50,6 +50,7 @@ import { permissionsApi, rolesApi } from "@/lib/api/access";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requirePermission } from "@/lib/guards";
 import { ApiError } from "@/lib/api/client";
+import { localizedMessage } from "@/lib/errors";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { cn } from "@/lib/utils";
 
@@ -158,7 +159,9 @@ function RolesTab() {
       qc.invalidateQueries({ queryKey: ["roles"] });
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : t("access:toast_role_delete_failed")),
+      toast.error(
+        err instanceof ApiError ? localizedMessage(err, t) : t("access:toast_role_delete_failed")
+      ),
   });
 
   // System roles first, then alphabetical inside each group.
@@ -687,7 +690,9 @@ function PermissionsTab() {
       qc.invalidateQueries({ queryKey: ["roles"] });
     },
     onError: (err) =>
-      toast.error(err instanceof ApiError ? err.message : t("access:toast_perm_delete_failed")),
+      toast.error(
+        err instanceof ApiError ? localizedMessage(err, t) : t("access:toast_perm_delete_failed")
+      ),
   });
 
   const grouped = useMemo(() => {

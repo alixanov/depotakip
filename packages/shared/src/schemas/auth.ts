@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-export const emailSchema = z.string().trim().toLowerCase().email("Geçersiz email");
-export const passwordSchema = z.string().min(10, "Şifre en az 10 karakter olmalı");
+export const emailSchema = z.string().trim().toLowerCase().email("validation:invalid_email");
+export const passwordSchema = z.string().min(10, "validation:password_min10");
 
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(1, "Şifre zorunlu"),
+  password: z.string().min(1, "validation:password_required"),
 });
 
 export const registerSchema = z.object({
@@ -23,7 +23,7 @@ export const resetPasswordSchema = z.object({
 });
 
 export const twoFactorVerifySchema = z.object({
-  code: z.string().regex(/^\d{6}$/, "6 hane gerekli"),
+  code: z.string().regex(/^\d{6}$/, "validation:totp_format"),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

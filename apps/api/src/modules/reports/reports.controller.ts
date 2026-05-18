@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import { badRequest, unauthorized } from "../../lib/errors.js";
 import * as service from "./reports.service.js";
 import { streamReport, type ReportFormat } from "./export.js";
@@ -9,11 +8,11 @@ interface RangeQuery {
   to?: string;
 }
 
-export const dashboard = asyncHandler(async (req: Request, res: Response) => {
+export const dashboard = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   const q = req.query as RangeQuery;
   res.json(await service.dashboard(req.orgId, q));
-});
+};
 
 const REPORT_DEFS = {
   carriers: {
@@ -54,24 +53,27 @@ const REPORT_DEFS = {
 
 type ReportType = keyof typeof REPORT_DEFS;
 
-export const report = asyncHandler<{ type: string }>(async (req, res) => {
+export const report = async (req: Request<{ type: string }>, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   const type = req.params.type as ReportType;
   const def = REPORT_DEFS[type];
-  if (!def) throw badRequest(`Bilinmeyen rapor: ${type}`);
+  if (!def) throw badRequest("err:unknown_report_type", { type });
   const q = req.query as RangeQuery;
   const rows = await def.fetch(req.orgId, q);
   res.json(rows);
-});
+};
 
-export const exportReport = asyncHandler<{ type: string }>(async (req, res) => {
+export const exportReport = async (
+  req: Request<{ type: string }>,
+  res: Response
+): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   const type = req.params.type as ReportType;
   const def = REPORT_DEFS[type];
-  if (!def) throw badRequest(`Bilinmeyen rapor: ${type}`);
+  if (!def) throw badRequest("err:unknown_report_type", { type });
   const format = ((req.query.format as string) || "csv") as ReportFormat;
   if (format !== "csv" && format !== "xlsx") {
-    throw badRequest("format must be csv or xlsx");
+    throw badRequest("err:invalid_export_format");
   }
   const q = req.query as RangeQuery;
   const rows = (await def.fetch(req.orgId, q)) as unknown as Record<string, unknown>[];
@@ -82,4 +84,4 @@ export const exportReport = asyncHandler<{ type: string }>(async (req, res) => {
     rows,
     format
   );
-});
+};

@@ -1,11 +1,10 @@
 import type { Request, Response } from "express";
 import type { CreateExchangeRateInput, Currency } from "@sadiyakargo/shared";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import * as service from "./exchangeRates.service.js";
 
 type IdParams = { id: string };
 
-export const list = asyncHandler(async (req: Request, res: Response) => {
+export const list = async (req: Request, res: Response): Promise<void> => {
   const q = req.query as { currency?: string; from?: string; to?: string };
   res.json(
     await service.list({
@@ -14,13 +13,13 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       to: q.to,
     })
   );
-});
+};
 
-export const create = asyncHandler(async (req: Request, res: Response) => {
+export const create = async (req: Request, res: Response): Promise<void> => {
   res.status(201).json(await service.create(req.body as CreateExchangeRateInput));
-});
+};
 
-export const remove = asyncHandler<IdParams>(async (req, res) => {
+export const remove = async (req: Request<IdParams>, res: Response): Promise<void> => {
   await service.remove(req.params.id);
   res.json({ ok: true });
-});
+};

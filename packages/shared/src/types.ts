@@ -83,8 +83,14 @@ export interface Role {
 export interface Sender {
   id: string;
   fullName: string;
+  /** Опциональный — оператор может ввести только имя. В БД пустая строка
+   *  означает «не указан»; в client-JSON `toClient()` пробрасывает как есть. */
   phone: string;
   telegramChatId: number | null;
+  /** Public Telegram handle (no leading `@`). Display + click-to-open only;
+   *  the Bot API cannot DM private users by username, so notifications still
+   *  require {@link telegramChatId}. */
+  telegramUsername: string | null;
   address: string;
   notes: string;
   isSelf: boolean;
@@ -95,9 +101,13 @@ export interface Sender {
 export interface Carrier {
   id: string;
   firstName: string;
+  /** Опциональна; в БД пустая строка. UI собирает `firstName lastName` с trim. */
   lastName: string;
+  /** Опциональный — см. Sender.phone. */
   phone: string;
   telegramChatId: number | null;
+  /** See {@link Sender.telegramUsername} — same display-only semantics. */
+  telegramUsername: string | null;
   deliveryAddressTr: string;
   notes: string;
   createdAt: string;
@@ -145,7 +155,6 @@ export interface ShipmentStatusEvent {
   changedBy: string;
   changedAt: string;
   comment: string;
-  proofPhoto: PhotoRef | null;
 }
 
 export interface Shipment {
@@ -235,9 +244,35 @@ export interface PaginatedResponse<T> {
   pagination: { page: number; limit: number; total: number; hasMore: boolean };
 }
 
+/** Отчёт по bulk-import: что создано/обновлено/пропущено + список failed-строк.
+ *  row нумеруется с 1 (без header-строки).
+ *
+ *  failed[i]:
+ *  - `reason` — захардкоженный fallback для логов и старых клиентов.
+ *  - `code` (опц.) — `err:xxx` для i18n.t(code, params) на клиенте.
+ *  - `params` — параметры интерполяции.
+ *  - `issues` — для zod-валидации: массив `{path, message}` (message может
+ *    быть `validation:xxx` ключом, который клиент переведёт сам). */
+export interface BulkImportReport {
+  total: number;
+  created: number;
+  updated: number;
+  skippedDuplicates: number;
+  failed: {
+    row: number;
+    reason: string;
+    code?: string;
+    params?: Record<string, unknown>;
+    issues?: { path: string; message: string }[];
+  }[];
+}
+
 export interface ApiErrorBody {
   error: string;
   code?: string;
+  /** Параметры для i18n-интерполяции (`{{count}}`, `{{max}}`). Backend
+   *  передаёт их при throw notFound("err:xxx", { count }). */
+  params?: Record<string, unknown>;
   details?: unknown;
   requestId?: string;
   fields?: Record<string, string>;

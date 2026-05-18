@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { STATUSES } from "../constants.js";
-import { moneySchema, objectIdSchema, phoneSchema } from "./common.js";
+import { objectIdSchema, phoneSchema, positiveMoneySchema } from "./common.js";
 
 export const recipientSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -11,15 +11,18 @@ export const recipientSchema = z.object({
 export const shipmentItemSchema = z.object({
   lotId: objectIdSchema,
   qty: z.coerce.number().int().positive(),
-  senderCharge: moneySchema.nullable().optional(),
+  // senderCharge: либо null (нет начисления отправителю), либо positive money.
+  // Нулевой charge не имеет смысла и упирается в Transaction.amount min:1.
+  senderCharge: positiveMoneySchema.nullable().optional(),
 });
 
 export const createShipmentSchema = z.object({
   carrierId: objectIdSchema,
   recipient: recipientSchema.nullable().optional(),
   shipmentDate: z.string().date().optional(),
-  carrierFee: moneySchema,
-  items: z.array(shipmentItemSchema).min(1, "En az bir mal eklemeli"),
+  // carrierFee всегда > 0 — бесплатной отгрузки не бывает.
+  carrierFee: positiveMoneySchema,
+  items: z.array(shipmentItemSchema).min(1, "validation:shipment_items_min1"),
   notes: z.string().trim().max(1000).default(""),
 });
 

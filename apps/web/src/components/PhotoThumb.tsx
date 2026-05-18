@@ -15,7 +15,7 @@ interface PhotoThumbProps {
 }
 
 /**
- * Square thumbnail backed by a 1h-presigned URL (TZ §9 photo-storage rule).
+ * Square thumbnail backed by a 1h-presigned URL (the default photo-storage TTL).
  * useQuery caches per (lotId, photoId) for 50 min so re-renders and sibling
  * rows reuse the same URL — N rows = N requests, not N×renders. `gcTime` is
  * intentionally just under the 1h presign TTL (55 min) so a query that lives

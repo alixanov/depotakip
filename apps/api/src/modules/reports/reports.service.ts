@@ -2,6 +2,8 @@ import { Types } from "mongoose";
 import { Shipment } from "../shipments/shipment.model.js";
 import { InboundLot } from "../lots/lot.model.js";
 import { Transaction } from "../transactions/transaction.model.js";
+import { Carrier } from "../carriers/carrier.model.js";
+import { Sender } from "../senders/sender.model.js";
 
 interface DateRange {
   from?: string;
@@ -43,7 +45,13 @@ export async function dashboard(orgId: string, range: DateRange = {}): Promise<D
       { $group: { _id: null, total: { $sum: "$qtyAvailable" } } },
     ]).then((r) => r[0]?.total || 0),
     Transaction.aggregate<{ d: number; c: number }>([
-      { $match: { orgId: new Types.ObjectId(orgId), "counterparty.type": "carrier" } },
+      {
+        $match: {
+          orgId: new Types.ObjectId(orgId),
+          "counterparty.type": "carrier",
+          ...rangeFilter(range, "txDate"),
+        },
+      },
       {
         $group: {
           _id: null,
@@ -57,7 +65,13 @@ export async function dashboard(orgId: string, range: DateRange = {}): Promise<D
       },
     ]).then((r) => (r[0] ? r[0].d - r[0].c : 0)),
     Transaction.aggregate<{ d: number; c: number }>([
-      { $match: { orgId: new Types.ObjectId(orgId), "counterparty.type": "sender" } },
+      {
+        $match: {
+          orgId: new Types.ObjectId(orgId),
+          "counterparty.type": "sender",
+          ...rangeFilter(range, "txDate"),
+        },
+      },
       {
         $group: {
           _id: null,
@@ -182,11 +196,11 @@ export async function carriers(orgId: string, range: DateRange = {}): Promise<Ca
   const shipById = new Map(shipmentStats.map((s) => [s._id.toString(), s]));
 
   // Resolve names with a single lookup if shipments don't carry it.
-  const carriersList = await (
-    await import("../carriers/carrier.model.js")
-  ).Carrier.find({ _id: { $in: Array.from(carrierIds).map((id) => new Types.ObjectId(id)) } });
+  const carriersList = await Carrier.find({
+    _id: { $in: Array.from(carrierIds).map((id) => new Types.ObjectId(id)) },
+  });
   const nameById = new Map(
-    carriersList.map((c) => [c._id.toString(), `${c.firstName} ${c.lastName}`])
+    carriersList.map((c) => [c._id.toString(), `${c.firstName} ${c.lastName}`.trim()])
   );
 
   return Array.from(carrierIds)
@@ -248,9 +262,9 @@ export async function senders(orgId: string, range: DateRange = {}): Promise<Sen
     ...lotStats.map((s) => s._id.toString()),
     ...finStats.map((s) => s._id.toString()),
   ]);
-  const sendersList = await (
-    await import("../senders/sender.model.js")
-  ).Sender.find({ _id: { $in: Array.from(ids).map((id) => new Types.ObjectId(id)) } });
+  const sendersList = await Sender.find({
+    _id: { $in: Array.from(ids).map((id) => new Types.ObjectId(id)) },
+  });
   const nameById = new Map(sendersList.map((s) => [s._id.toString(), s.fullName]));
   const lotById = new Map(lotStats.map((s) => [s._id.toString(), s]));
   const finById = new Map(finStats.map((f) => [f._id.toString(), f]));

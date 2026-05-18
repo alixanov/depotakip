@@ -20,6 +20,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     res.status(err.status).json({
       error: err.message,
       code: err.code,
+      ...(err.params !== undefined ? { params: err.params } : {}),
       ...(err.details !== undefined ? { details: err.details } : {}),
     });
     return;
@@ -30,48 +31,57 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     for (const [key, value] of Object.entries(err.errors)) {
       fields[key] = value.message;
     }
-    res.status(422).json({ error: "Doğrulama hatası", code: "VALIDATION", fields });
+    res.status(422).json({ error: "Doğrulama hatası", code: "err:validation_failed", fields });
     return;
   }
 
   if (err instanceof mongoose.Error.CastError) {
-    res.status(400).json({ error: "Geçersiz id", code: "BAD_REQUEST" });
+    res.status(400).json({ error: "Geçersiz id", code: "err:invalid_id" });
     return;
   }
 
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       const mb = Math.round(env.LOT_PHOTO_MAX_BYTES / (1024 * 1024));
-      res
-        .status(413)
-        .json({ error: `Dosya boyutu ${mb} MB sınırını aşıyor`, code: "FILE_TOO_LARGE" });
+      res.status(413).json({
+        error: `Dosya boyutu ${mb} MB sınırını aşıyor`,
+        code: "err:file_too_large",
+        params: { mb },
+      });
       return;
     }
     if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
       res.status(400).json({
         error: `En fazla ${env.LOT_PHOTO_MAX_COUNT} dosya yüklenebilir`,
-        code: "TOO_MANY_FILES",
+        code: "err:too_many_files",
+        params: { max: env.LOT_PHOTO_MAX_COUNT },
       });
       return;
     }
-    res.status(400).json({ error: err.message, code: "UPLOAD_ERROR" });
+    res.status(400).json({ error: err.message, code: "err:upload_error" });
     return;
   }
 
   // Custom signal from upload middleware fileFilter when the declared MIME
-  // is not an image. The real magic-byte check still runs in the service.
+  // is not an image / not allowed. The real magic-byte check still runs in
+  // the service.
   if (err instanceof Error && err.message === "UNSUPPORTED_MEDIA") {
-    res
-      .status(415)
-      .json({ error: "Sadece resim dosyaları yüklenebilir", code: "UNSUPPORTED_MEDIA" });
+    res.status(415).json({
+      error: "Sadece resim dosyaları yüklenebilir",
+      code: "err:unsupported_media",
+    });
     return;
   }
 
   const maybeMongo = err as MongoLikeError;
   if (maybeMongo && maybeMongo.code === 11000) {
-    res.status(409).json({ error: "Kayıt zaten mevcut", code: "CONFLICT" });
+    res.status(409).json({ error: "Kayıt zaten mevcut", code: "err:duplicate" });
     return;
   }
 
-  res.status(500).json({ error: "Internal server error", code: "INTERNAL", requestId: req.id });
+  res.status(500).json({
+    error: "Internal server error",
+    code: "err:internal",
+    requestId: req.id,
+  });
 }

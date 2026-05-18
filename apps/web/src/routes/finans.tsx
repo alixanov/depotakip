@@ -65,9 +65,9 @@ const paymentFormSchema = z.object({
   kind: z.enum(TRANSACTION_KINDS),
   counterparty: z.object({
     type: z.enum(["carrier", "sender"]),
-    id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Karşı taraf seçin"),
+    id: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:counterparty_required"),
   }),
-  amount: z.coerce.number().positive("Tutar > 0 olmalı"),
+  amount: z.coerce.number().positive("validation:amount_positive"),
   currency: z.enum(CURRENCIES),
   method: z.enum(PAYMENT_METHODS),
   notes: z.string().trim().max(1000).default(""),
@@ -385,7 +385,7 @@ function TxTab() {
   const counterpartyName = (tx: Transaction): string => {
     if (tx.counterparty.type === "carrier") {
       const c = carrierById.get(tx.counterparty.id);
-      return c ? `${c.firstName} ${c.lastName}` : t("finans:no_party");
+      return c ? `${c.firstName} ${c.lastName}`.trim() : t("finans:no_party");
     }
     const s = senderById.get(tx.counterparty.id);
     return s ? s.fullName : t("finans:no_party");
@@ -890,12 +890,12 @@ function PaymentDialog({ open, onClose }: { open: boolean; onClose: () => void }
                     value={field.value || ""}
                     onChange={field.onChange}
                     getValue={(c) => c.id}
-                    getLabel={(c) => `${c.firstName} ${c.lastName}`}
+                    getLabel={(c) => `${c.firstName} ${c.lastName}`.trim()}
                     getSearchKeys={(c) => [c.phone]}
                     renderOption={(c) => (
                       <div className="flex min-w-0 items-baseline justify-between gap-2">
                         <span className="truncate font-medium">
-                          {c.firstName} {c.lastName}
+                          {`${c.firstName} ${c.lastName}`.trim()}
                         </span>
                         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                           {c.phone}

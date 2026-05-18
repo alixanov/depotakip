@@ -1,6 +1,7 @@
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { localizedMessage } from "@/lib/errors";
 
 interface WithId {
   id: string;
@@ -74,7 +75,7 @@ export function useUndoableDelete({
       } catch (err) {
         restore();
         toast.error(t("undo:delete_failed"), {
-          description: err instanceof Error ? err.message : undefined,
+          description: localizedMessage(err, t),
         });
       }
     }, windowMs);

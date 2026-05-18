@@ -17,12 +17,16 @@ export interface PaginationParams {
   sort?: string;
 }
 
-/** Helper to run a paginated, soft-delete-aware list query. */
+/** Helper to run a paginated, soft-delete-aware list query.
+ *  `map` may be sync (`doc → R`) or async (`doc → Promise<R>`) — async case is
+ *  parallelised through `Promise.all`. Use async when the row needs a second
+ *  lookup (e.g. denormalised role for `User`).
+ */
 export async function paginate<R>(
   model: Model<any>,
   filter: FilterQuery<any>,
   pagination: PaginationParams,
-  map: (doc: any) => R,
+  map: (doc: any) => R | Promise<R>,
   defaultSort: Record<string, 1 | -1> = { createdAt: -1 }
 ): Promise<PaginatedResponse<R>> {
   const page = pagination.page ?? 1;
@@ -39,7 +43,7 @@ export async function paginate<R>(
   ]);
 
   return {
-    data: docs.map(map),
+    data: await Promise.all(docs.map(map)),
     pagination: { page, limit, total, hasMore: page * limit < total },
   };
 }

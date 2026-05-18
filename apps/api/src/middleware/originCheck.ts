@@ -7,20 +7,22 @@ const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-/** CSRF defence layer 2 (layer 1 is SameSite=Strict on the refresh cookie).
+/** CSRF defence layer 2 (layer 1 is SameSite=Lax on the refresh cookie —
+ *  Strict was rejected because prod web + api live on different Railway
+ *  subdomains, see cookies.ts for the full rationale).
  *  For unsafe methods, require Origin/Referer to match the allow-list. */
 export function originCheck(req: Request, _res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) return next();
   if (env.NODE_ENV === "test") return next();
 
   const header = req.get("origin") || req.get("referer");
-  if (!header) return next(forbidden("Origin header required"));
+  if (!header) return next(forbidden("err:origin_required"));
 
   let originUrl: URL;
   try {
     originUrl = new URL(header);
   } catch {
-    return next(forbidden("Malformed Origin"));
+    return next(forbidden("err:origin_malformed"));
   }
 
   const allowed = ALLOWED_ORIGINS.some((allow) => {
@@ -31,6 +33,6 @@ export function originCheck(req: Request, _res: Response, next: NextFunction): v
     }
   });
 
-  if (!allowed) return next(forbidden("Origin not allowed"));
+  if (!allowed) return next(forbidden("err:origin_not_allowed"));
   next();
 }

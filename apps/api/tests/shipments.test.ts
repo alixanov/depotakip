@@ -173,6 +173,38 @@ describe("PATCH /shipments/:id/status", () => {
     expect(lot?.qtyAvailable).toBe(10);
     expect(lot?.status).toBe("in_stock");
   });
+
+  it("cancel multi-shipment: lot.status корректен при активном втором шипменте", async () => {
+    // qtyIn=10. A берёт 4, B берёт 6 — лот fully_shipped. Cancel A →
+    // qtyAvailable=4. Раньше status затирался на "in_stock" (баг — UI бы
+    // показал лот как полностью доступный, хотя 6 шт в активном B).
+    // Сейчас должен быть "partially_shipped".
+    const s = await seed();
+    const shipA = await request(app)
+      .post(apiPath("/shipments"))
+      .set(...authHeader(s.token))
+      .send(shipmentBody(s, { items: [{ lotId: s.lotId, qty: 4 }] }))
+      .expect(201);
+    await request(app)
+      .post(apiPath("/shipments"))
+      .set(...authHeader(s.token))
+      .send(shipmentBody(s, { items: [{ lotId: s.lotId, qty: 6 }] }))
+      .expect(201);
+
+    let lot = await InboundLot.findById(s.lotId);
+    expect(lot?.qtyAvailable).toBe(0);
+    expect(lot?.status).toBe("fully_shipped");
+
+    await request(app)
+      .patch(apiPath(`/shipments/${shipA.body.id}/status`))
+      .set(...authHeader(s.token))
+      .send({ status: "iptal" })
+      .expect(200);
+
+    lot = await InboundLot.findById(s.lotId);
+    expect(lot?.qtyAvailable).toBe(4);
+    expect(lot?.status).toBe("partially_shipped");
+  });
 });
 
 describe("GET /public/track/:token", () => {

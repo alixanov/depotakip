@@ -39,7 +39,7 @@ export async function list(orgId: string, query: ListQuery) {
 
 export async function get(orgId: string, id: string) {
   const doc = await Transaction.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Tx bulunamadı");
+  if (!doc) throw notFound("err:transaction_not_found");
   return doc.toClient();
 }
 
@@ -102,21 +102,21 @@ export async function registerPayment(orgId: string, input: CreateTransactionInp
   // Verify the counterparty exists in this org. The error payload includes
   // `counterpartyType` + `counterpartyId` so the operator can tell whether
   // they sent the wrong sender id or the wrong carrier id (the central
-  // error middleware forwards `details` to the client).
-  const notFoundDetails = {
-    counterpartyType: input.counterparty.type,
-    counterpartyId: input.counterparty.id,
+  // error middleware forwards `params` to the client for i18n interpolation.
+  const partyParams = {
+    type: input.counterparty.type,
+    id: input.counterparty.id,
   };
   if (input.counterparty.type === "carrier") {
     const c = await Carrier.findOne(
       tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
     );
-    if (!c) throw badRequest("Karşı taraf bulunamadı: kargocu", notFoundDetails);
+    if (!c) throw badRequest("err:counterparty_not_found_carrier", partyParams);
   } else {
     const s = await Sender.findOne(
       tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
     );
-    if (!s) throw badRequest("Karşı taraf bulunamadı: gönderici", notFoundDetails);
+    if (!s) throw badRequest("err:counterparty_not_found_sender", partyParams);
   }
 
   const doc = await createTx(orgId, {

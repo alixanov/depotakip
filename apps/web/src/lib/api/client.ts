@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 export class ApiError extends Error {
   status: number;
   code?: string;
+  params?: Record<string, unknown>;
   details?: unknown;
   fields?: Record<string, string>;
   constructor(body: ApiErrorBody, status: number) {
@@ -12,6 +13,9 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.code = body.code;
+    // params используется клиентом для i18n.t(code, params) — например
+    // {{count}}/{{max}} в сообщении об ошибке.
+    this.params = body.params;
     this.details = body.details;
     this.fields = body.fields;
   }

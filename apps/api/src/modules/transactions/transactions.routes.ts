@@ -9,12 +9,26 @@ import { paymentReceiptPdf } from "./receipt.controller.js";
 const router = Router();
 router.use(requireAuth);
 
-router.get("/balances/carriers", controller.carrierBalances);
-router.get("/balances/senders", controller.senderBalances);
+router.get(
+  "/balances/carriers",
+  requirePermission("transactions:read"),
+  controller.carrierBalances
+);
+router.get("/balances/senders", requirePermission("transactions:read"), controller.senderBalances);
 
-router.get("/", controller.list);
-router.get("/:id/receipt.pdf", validate({ params: idParamSchema }), paymentReceiptPdf);
-router.get("/:id", validate({ params: idParamSchema }), controller.get);
+router.get("/", requirePermission("transactions:read"), controller.list);
+router.get(
+  "/:id/receipt.pdf",
+  requirePermission("transactions:read"),
+  validate({ params: idParamSchema }),
+  paymentReceiptPdf
+);
+router.get(
+  "/:id",
+  requirePermission("transactions:read"),
+  validate({ params: idParamSchema }),
+  controller.get
+);
 
 router.post(
   "/",

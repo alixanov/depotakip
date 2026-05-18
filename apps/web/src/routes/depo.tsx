@@ -577,7 +577,7 @@ function LotsTab() {
  * `label` and `unitPrice` are optional; an empty amount means "no price".
  */
 const receiveFormSchema = z.object({
-  senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Gönderici seçin"),
+  senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:sender_required"),
   label: z.string().trim().max(120).default(""),
   qtyIn: z.coerce.number().int().positive(),
   unitPriceAmount: z.coerce.number().nonnegative().optional(),
@@ -605,7 +605,11 @@ function ReceiveTab() {
     defaultValues: {
       senderId: "",
       label: "",
-      qtyIn: 1,
+      // qtyIn пустой по умолчанию (как unitPriceAmount) — оператор видит
+      // placeholder "0" и сразу вводит цифру вместо стирания дефолтной "1".
+      // На submit zod-валидация (positive int) словит пустое значение,
+      // если оператор забыл ввести qty.
+      qtyIn: undefined as unknown as number,
       unitPriceAmount: undefined,
       unitPriceCurrency: "USD",
       notes: "",
@@ -652,7 +656,7 @@ function ReceiveTab() {
         toast.success(t("depo:toast_created"), {
           description: t("depo:toast_created_desc", { code: lot.id.slice(-6) }),
         });
-        // Two-step photo upload (TZ §6.5 — POST /lots/:id/photos). On failure
+        // Two-step photo upload (POST /lots/:id/photos after the lot exists). On failure
         // the lot is already in the DB; surface a separate toast so the user
         // can re-attempt via the gallery later.
         if (stagedPhotos.length > 0) {
@@ -671,7 +675,7 @@ function ReceiveTab() {
         form.reset({
           senderId: mode === "new" ? values.senderId : "",
           label: "",
-          qtyIn: 1,
+          qtyIn: undefined as unknown as number,
           unitPriceAmount: undefined,
           unitPriceCurrency: values.unitPriceCurrency,
           notes: "",
@@ -858,7 +862,7 @@ function ReceiveTab() {
       <SenderFormDialog
         open={senderDialogOpen}
         onOpenChange={setSenderDialogOpen}
-        onCreated={(sender) => {
+        onSaved={(sender) => {
           // Auto-select the freshly created sender + invalidate the cached
           // list so the Combobox sees the new entry on its next open.
           form.setValue("senderId", sender.id, { shouldValidate: true });

@@ -12,15 +12,16 @@ export async function list() {
 
 export async function get(id: string) {
   const doc = await Permission.findById(id);
-  if (!doc) throw notFound("Yetki bulunamadı");
+  if (!doc) throw notFound("err:permission_not_found");
   return doc.toClient();
 }
 
 export async function create(input: CreatePermissionInput) {
-  const existing = await Permission.findOne({ key: input.key.toLowerCase() });
-  if (existing) throw conflict("Bu anahtar zaten kayıtlı");
+  // permissionKeySchema требует регексом `[a-z0-9_]` — input.key уже lowercase.
+  const existing = await Permission.findOne({ key: input.key });
+  if (existing) throw conflict("err:permission_key_taken");
   const doc = await Permission.create({
-    key: input.key.toLowerCase(),
+    key: input.key,
     label: input.label,
     description: input.description ?? "",
     group: input.group ?? null,
@@ -35,14 +36,14 @@ export async function update(id: string, input: UpdatePermissionInput) {
   if (input.description !== undefined) $set.description = input.description;
   if (input.group !== undefined) $set.group = input.group;
   const doc = await Permission.findByIdAndUpdate(id, { $set }, { new: true });
-  if (!doc) throw notFound("Yetki bulunamadı");
+  if (!doc) throw notFound("err:permission_not_found");
   return doc.toClient();
 }
 
 export async function remove(id: string) {
   const doc = await Permission.findById(id);
-  if (!doc) throw notFound("Yetki bulunamadı");
-  if (doc.isSystem) throw conflict("Sistem yetkisi silinemez");
+  if (!doc) throw notFound("err:permission_not_found");
+  if (doc.isSystem) throw conflict("err:system_permission_locked");
   // Snapshot affected roles BEFORE pulling so the audit log can describe the
   // silent privilege downgrade ("role X used to grant 'lots:foo' until perm
   // <id> was deleted at <ts>"). Without this trail a sudden 403 cascade is

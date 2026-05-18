@@ -23,11 +23,11 @@ import { useLogout } from "@/lib/useLogout";
 import { cn } from "@/lib/utils";
 
 /**
- * Mobile-first bottom navigation (TZ §A): 5 most-used tabs + "Menü" drawer
- * for overflow. Hidden on md+ screens — desktop uses the top nav in __root.
+ * Mobile-first bottom navigation: 5 most-used tabs + "Menü" drawer for
+ * overflow. Hidden on md+ screens — desktop uses the top nav in __root.
  *
  * - Fixed bottom, height 64px + safe-area-inset-bottom for iPhone notch.
- * - Each tap target is 44×44px (TZ §A / WCAG 2.2 SC 2.5.8).
+ * - Each tap target is 44×44px (WCAG 2.2 SC 2.5.8).
  * - Active state mirrors top-nav: `[&.active]` from TanStack Router.
  */
 export function MobileBottomNav() {

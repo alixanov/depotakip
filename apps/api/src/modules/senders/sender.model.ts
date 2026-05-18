@@ -6,6 +6,7 @@ export interface SenderDoc extends Document {
   fullName: string;
   phone: string;
   telegramChatId: number | null;
+  telegramUsername: string | null;
   address: string;
   notes: string;
   isSelf: boolean;
@@ -17,6 +18,7 @@ export interface SenderDoc extends Document {
     fullName: string;
     phone: string;
     telegramChatId: number | null;
+    telegramUsername: string | null;
     address: string;
     notes: string;
     isSelf: boolean;
@@ -29,8 +31,12 @@ const senderSchema = new Schema<SenderDoc>(
   {
     orgId: { type: Schema.Types.ObjectId, required: true, index: true },
     fullName: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    // phone опционален: пустая строка по умолчанию (см. shared
+    // optionalPhoneSchema — нормализует "" / whitespace → undefined,
+    // Mongoose сохраняет default "").
+    phone: { type: String, default: "", trim: true },
     telegramChatId: { type: Number, default: null },
+    telegramUsername: { type: String, default: null, trim: true },
     address: { type: String, default: "", trim: true },
     notes: { type: String, default: "", trim: true },
     isSelf: { type: Boolean, default: false },
@@ -47,6 +53,7 @@ senderSchema.methods.toClient = function toClient() {
     fullName: this.fullName,
     phone: this.phone,
     telegramChatId: this.telegramChatId,
+    telegramUsername: this.telegramUsername ?? null,
     address: this.address,
     notes: this.notes,
     isSelf: this.isSelf,

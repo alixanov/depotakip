@@ -1,9 +1,11 @@
 import type {
+  BulkImportReport,
   Carrier,
   CreateCarrierInput,
   PaginatedResponse,
   UpdateCarrierInput,
 } from "@sadiyakargo/shared";
+import { API_BASE } from "@/lib/env";
 import { request } from "./client";
 
 export const carriersApi = {
@@ -20,4 +22,13 @@ export const carriersApi = {
   update: (id: string, input: UpdateCarrierInput) =>
     request<Carrier>(`/carriers/${id}`, { method: "PATCH", body: input }),
   remove: (id: string) => request<{ ok: true }>(`/carriers/${id}`, { method: "DELETE" }),
+  bulkImport: (file: File, onDuplicate: "skip" | "update" = "skip") => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<BulkImportReport>(`/carriers/bulk-import?onDuplicate=${onDuplicate}`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  importTemplateUrl: () => `${API_BASE}/carriers/import-template.xlsx`,
 };

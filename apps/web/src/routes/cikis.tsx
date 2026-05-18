@@ -34,7 +34,7 @@ import { CarrierFormDialog } from "@/components/CarrierFormDialog";
  * concept to operators and prevents ×100 input errors.
  */
 const cikisFormSchema = z.object({
-  carrierId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Kargocu seçin"),
+  carrierId: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:carrier_required"),
   recipient: z
     .object({
       name: z.string().trim().max(120).default(""),
@@ -44,19 +44,19 @@ const cikisFormSchema = z.object({
     .optional(),
   shipmentDate: z.string().min(1),
   carrierFee: z.object({
-    amount: z.coerce.number().nonnegative("Negatif olamaz"),
+    amount: z.coerce.number().nonnegative("validation:nonnegative"),
     currency: z.enum(CURRENCIES),
   }),
   items: z
     .array(
       z.object({
-        lotId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Parti seçin"),
-        qty: z.coerce.number().int().positive("Adet > 0"),
+        lotId: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:lot_required"),
+        qty: z.coerce.number().int().positive("validation:qty_positive"),
         senderChargeAmount: z.coerce.number().nonnegative().optional(),
         senderChargeCurrency: z.enum(CURRENCIES).optional(),
       })
     )
-    .min(1, "En az bir mal eklemeli"),
+    .min(1, "validation:shipment_items_min1"),
   notes: z.string().trim().max(1000).default(""),
 });
 
@@ -187,12 +187,12 @@ function CreateShipmentPage() {
                       value={field.value || ""}
                       onChange={field.onChange}
                       getValue={(c) => c.id}
-                      getLabel={(c) => `${c.firstName} ${c.lastName}`}
+                      getLabel={(c) => `${c.firstName} ${c.lastName}`.trim()}
                       getSearchKeys={(c) => [c.phone]}
                       renderOption={(c) => (
                         <div className="flex min-w-0 items-baseline justify-between gap-2">
                           <span className="truncate font-medium">
-                            {c.firstName} {c.lastName}
+                            {`${c.firstName} ${c.lastName}`.trim()}
                           </span>
                           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                             {c.phone}
@@ -540,7 +540,7 @@ function CreateShipmentPage() {
       <CarrierFormDialog
         open={carrierDialogOpen}
         onOpenChange={setCarrierDialogOpen}
-        onCreated={(carrier) => {
+        onSaved={(carrier) => {
           // Auto-select the freshly-created carrier + invalidate the cache so
           // subsequent opens of the Combobox see the new entry.
           form.setValue("carrierId", carrier.id, { shouldValidate: true });

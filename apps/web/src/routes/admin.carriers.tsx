@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type Carrier } from "@sadiyakargo/shared";
-import { Plus, Trash2, Truck } from "lucide-react";
+import { FileUp, Pencil, Plus, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable, PaginationBar, type Column } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CarrierFormDialog } from "@/components/CarrierFormDialog";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { carriersApi } from "@/lib/api/carriers";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requirePermission } from "@/lib/guards";
@@ -27,6 +28,8 @@ function CarriersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editing, setEditing] = useState<Carrier | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { t } = useTranslation();
 
@@ -46,13 +49,28 @@ function CarriersPage() {
     {
       key: "name",
       header: t("admin:col_name"),
+      cell: (c) => <span className="font-medium">{`${c.firstName} ${c.lastName}`.trim()}</span>,
+    },
+    {
+      key: "phone",
+      header: t("admin:col_phone"),
       cell: (c) => (
-        <span className="font-medium">
-          {c.firstName} {c.lastName}
-        </span>
+        <div className="leading-tight">
+          <div className={c.phone ? "tabular-nums" : "text-muted-foreground"}>{c.phone || "—"}</div>
+          {c.telegramUsername && (
+            <a
+              href={`https://t.me/${c.telegramUsername}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-primary hover:underline"
+            >
+              @{c.telegramUsername}
+            </a>
+          )}
+        </div>
       ),
     },
-    { key: "phone", header: t("admin:col_phone"), cell: (c) => c.phone },
     {
       key: "addr",
       header: t("admin:col_addressTr"),
@@ -61,18 +79,24 @@ function CarriersPage() {
     {
       key: "actions",
       header: "",
-      cell: (c) =>
-        canDelete ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setConfirmId(c.id)}
-            aria-label={t("delete")}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
+      cell: (c) => (
+        <div className="flex justify-end gap-0.5">
+          <Button variant="ghost" size="icon" onClick={() => setEditing(c)} aria-label={t("edit")}>
+            <Pencil className="h-4 w-4" />
           </Button>
-        ) : null,
-      width: "60px",
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setConfirmId(c.id)}
+              aria-label={t("delete")}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
+      ),
+      width: "96px",
       className: "text-right",
     },
   ];
@@ -91,6 +115,10 @@ function CarriersPage() {
             }}
             className="w-56"
           />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-1 h-4 w-4" />
+            {t("import:btn")}
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
             {t("add")}
@@ -110,25 +138,48 @@ function CarriersPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
-                    {c.firstName} {c.lastName}
+                    {`${c.firstName} ${c.lastName}`.trim()}
                   </p>
-                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  {c.phone && (
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  )}
+                  {c.telegramUsername && (
+                    <a
+                      href={`https://t.me/${c.telegramUsername}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 inline-block text-xs text-primary hover:underline"
+                    >
+                      @{c.telegramUsername}
+                    </a>
+                  )}
                   {c.deliveryAddressTr && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {c.deliveryAddressTr}
                     </p>
                   )}
                 </div>
-                {canDelete && (
+                <div className="flex shrink-0 items-start gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setConfirmId(c.id)}
-                    aria-label={t("delete")}
+                    onClick={() => setEditing(c)}
+                    aria-label={t("edit")}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Pencil className="h-4 w-4" />
                   </Button>
-                )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setConfirmId(c.id)}
+                      aria-label={t("delete")}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             empty={
@@ -148,7 +199,25 @@ function CarriersPage() {
         </CardContent>
       </Card>
 
-      <CarrierFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CarrierFormDialog
+        open={dialogOpen || !!editing}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialogOpen(false);
+            setEditing(null);
+          }
+        }}
+        carrier={editing ?? undefined}
+      />
+
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        importFn={(file, onDup) => carriersApi.bulkImport(file, onDup)}
+        templateUrl={carriersApi.importTemplateUrl()}
+        invalidateKey="carriers"
+        title={t("import:title_carriers")}
+      />
 
       <ConfirmDialog
         open={!!confirmId}

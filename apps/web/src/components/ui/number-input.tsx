@@ -36,6 +36,7 @@ export function NumberInput({
   ref,
   decrementLabel,
   incrementLabel,
+  placeholder,
   ...props
 }: NumberInputProps) {
   const { t } = useTranslation();
@@ -47,9 +48,13 @@ export function NumberInput({
     if (typeof max === "number") n = Math.min(max, n);
     return n;
   };
+  const isIntegerStep = Number.isInteger(step);
   const change = (delta: number) => {
     const base = typeof value === "number" && !Number.isNaN(value) ? value : 0;
-    onChange?.(clamp(Math.round((base + delta) * 1e6) / 1e6));
+    // Для целых step не округляем через 1e6 (избегаем edge-case "$100.0001
+    // → $100.00"). Для дробных оставляем precision-fix против плавучки.
+    const next = isIntegerStep ? base + delta : Math.round((base + delta) * 1e6) / 1e6;
+    onChange?.(clamp(next));
   };
 
   return (
@@ -79,6 +84,9 @@ export function NumberInput({
         type="number"
         inputMode="decimal"
         value={value ?? ""}
+        // Дефолт "0" — visual hint когда поле очищено. Перебивается явно
+        // через prop, если call-site хочет своё (например "qty").
+        placeholder={placeholder ?? "0"}
         onChange={(e) => {
           const raw = e.target.value;
           // Empty input → undefined (NOT 0). Otherwise the field would

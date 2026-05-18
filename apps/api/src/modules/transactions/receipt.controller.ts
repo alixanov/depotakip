@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createElement } from "react";
+import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { PaymentReceiptDocument, qrDataUrl, renderToStream } from "@sadiyakargo/pdf-templates";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
@@ -14,12 +14,12 @@ import { Sender } from "../senders/sender.model.js";
 
 type IdParams = { id: string };
 
-export const paymentReceiptPdf = asyncHandler<IdParams>(async (req, res) => {
+export const paymentReceiptPdf = async (req: Request<IdParams>, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
   const tx = await Transaction.findOne(
     tenantFilter(req.orgId, { _id: new Types.ObjectId(req.params.id) })
   );
-  if (!tx) throw notFound("Tx bulunamadı");
+  if (!tx) throw notFound("err:transaction_not_found");
 
   const party =
     tx.counterparty.type === "carrier"
@@ -92,4 +92,4 @@ export const paymentReceiptPdf = asyncHandler<IdParams>(async (req, res) => {
     else res.destroy(err);
   });
   stream.pipe(res as unknown as NodeJS.WritableStream);
-});
+};

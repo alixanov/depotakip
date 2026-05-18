@@ -7,7 +7,7 @@ import * as controller from "./exchangeRates.controller.js";
 const router = Router();
 router.use(requireAuth);
 
-router.get("/", controller.list);
+router.get("/", requirePermission("exchange_rates:read"), controller.list);
 router.post(
   "/",
   requirePermission("exchange_rates:manage"),
