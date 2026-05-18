@@ -17,7 +17,7 @@ export async function get(orgId: string, id: string) {
   const doc = await NotificationTemplate.findOne(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) })
   );
-  if (!doc) throw notFound("Şablon bulunamadı");
+  if (!doc) throw notFound("err:template_not_found");
   return doc.toClient();
 }
 
@@ -35,7 +35,7 @@ export async function create(orgId: string, input: CreateTemplateInput) {
       "code" in err &&
       (err as { code: number }).code === 11000
     ) {
-      throw conflict("Bu şablon (key+channel+language) zaten mevcut");
+      throw conflict("err:template_duplicate");
     }
     throw err;
   }
@@ -47,7 +47,7 @@ export async function update(orgId: string, id: string, input: UpdateTemplateInp
     { $set: input },
     { new: true, runValidators: true }
   );
-  if (!doc) throw notFound("Şablon bulunamadı");
+  if (!doc) throw notFound("err:template_not_found");
   return doc.toClient();
 }
 
@@ -55,5 +55,5 @@ export async function remove(orgId: string, id: string) {
   const doc = await NotificationTemplate.findOneAndDelete(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) })
   );
-  if (!doc) throw notFound("Şablon bulunamadı");
+  if (!doc) throw notFound("err:template_not_found");
 }

@@ -42,7 +42,7 @@ export async function get(orgId: string, id: string): Promise<SafeUser> {
     orgId: new Types.ObjectId(orgId),
     deletedAt: null,
   });
-  if (!user) throw notFound("Kullanıcı bulunamadı");
+  if (!user) throw notFound("err:user_not_found");
   return asSafeJSON(user);
 }
 
@@ -52,7 +52,7 @@ export async function create(
 ): Promise<{ user: SafeUser; tempPassword: string }> {
   // email уже .trim().toLowerCase() через emailSchema (createUserSchema).
   const existing = await User.findOne({ email: input.email });
-  if (existing) throw conflict("Bu email zaten kayıtlı");
+  if (existing) throw conflict("err:email_taken");
 
   // Confirm the role belongs to this org — protects against assigning a role
   // owned by another tenant via a leaked id.
@@ -60,7 +60,7 @@ export async function create(
     _id: new Types.ObjectId(input.roleId),
     orgId: new Types.ObjectId(orgId),
   });
-  if (!role) throw badRequest("Rol bulunamadı");
+  if (!role) throw badRequest("err:role_not_found");
 
   const tempPassword = randomBytes(12).toString("base64url");
   const passwordHash = await hash(tempPassword);
@@ -101,17 +101,17 @@ export async function update(
   const orgObjectId = new Types.ObjectId(orgId);
   if (input.roleId) {
     const role = await Role.findOne({ _id: new Types.ObjectId(input.roleId), orgId: orgObjectId });
-    if (!role) throw badRequest("Rol bulunamadı");
+    if (!role) throw badRequest("err:role_not_found");
   }
   // Self-protection: a user with `users:manage` could otherwise promote
   // themselves into a higher-privileged role by editing their own row.
   // Disabling oneself is also blocked for the same lockout reason.
   if (id === requesterId) {
     if (input.roleId !== undefined) {
-      throw conflict("Kendi rolünüzü değiştiremezsiniz");
+      throw conflict("err:cannot_change_own_role");
     }
     if (input.active === false) {
-      throw conflict("Kendi hesabınızı devre dışı bırakamazsınız");
+      throw conflict("err:cannot_disable_self");
     }
   }
   const $set: Record<string, unknown> = {};
@@ -124,17 +124,17 @@ export async function update(
     { $set },
     { new: true, runValidators: true }
   );
-  if (!user) throw notFound("Kullanıcı bulunamadı");
+  if (!user) throw notFound("err:user_not_found");
   return asSafeJSON(user);
 }
 
 export async function softDelete(orgId: string, id: string, requesterId: string): Promise<void> {
   if (id === requesterId) {
-    throw conflict("Kendinizi silemezsiniz");
+    throw conflict("err:cannot_delete_self");
   }
   const user = await User.findOneAndUpdate(
     { _id: id, orgId: new Types.ObjectId(orgId), deletedAt: null },
     { $set: { deletedAt: new Date(), active: false } }
   );
-  if (!user) throw notFound("Kullanıcı bulunamadı");
+  if (!user) throw notFound("err:user_not_found");
 }

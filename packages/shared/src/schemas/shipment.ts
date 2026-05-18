@@ -19,7 +19,7 @@ export const createShipmentSchema = z.object({
   recipient: recipientSchema.nullable().optional(),
   shipmentDate: z.string().date().optional(),
   carrierFee: moneySchema,
-  items: z.array(shipmentItemSchema).min(1, "En az bir mal eklemeli"),
+  items: z.array(shipmentItemSchema).min(1, "validation:shipment_items_min1"),
   notes: z.string().trim().max(1000).default(""),
 });
 

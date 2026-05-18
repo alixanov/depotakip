@@ -44,7 +44,7 @@ export const updateStatus = async (req: Request<IdParams>, res: Response): Promi
   // write без cancel; раньше эта семантика не enforced (можно было отменить
   // через тот же эндпоинт).
   if (body.status === "iptal" && !req.userPermissions?.includes("shipments:cancel")) {
-    throw forbidden("Yetkisiz işlem (gerekli: shipments:cancel)");
+    throw forbidden("err:permission_required", { key: "shipments:cancel" });
   }
   res.json(
     await service.updateStatus(

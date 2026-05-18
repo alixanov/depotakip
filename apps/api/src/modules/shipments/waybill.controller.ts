@@ -20,7 +20,7 @@ export const waybillPdf = async (req: Request<IdParams>, res: Response): Promise
   const shipment = await Shipment.findOne(
     tenantFilter(req.orgId, { _id: new Types.ObjectId(req.params.id) })
   );
-  if (!shipment) throw notFound("Gönderi bulunamadı");
+  if (!shipment) throw notFound("err:shipment_not_found");
 
   const carrier = await Carrier.findById(shipment.carrierId);
 

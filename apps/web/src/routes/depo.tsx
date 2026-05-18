@@ -577,7 +577,7 @@ function LotsTab() {
  * `label` and `unitPrice` are optional; an empty amount means "no price".
  */
 const receiveFormSchema = z.object({
-  senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Gönderici seçin"),
+  senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:sender_required"),
   label: z.string().trim().max(120).default(""),
   qtyIn: z.coerce.number().int().positive(),
   unitPriceAmount: z.coerce.number().nonnegative().optional(),
@@ -605,7 +605,11 @@ function ReceiveTab() {
     defaultValues: {
       senderId: "",
       label: "",
-      qtyIn: 1,
+      // qtyIn пустой по умолчанию (как unitPriceAmount) — оператор видит
+      // placeholder "0" и сразу вводит цифру вместо стирания дефолтной "1".
+      // На submit zod-валидация (positive int) словит пустое значение,
+      // если оператор забыл ввести qty.
+      qtyIn: undefined as unknown as number,
       unitPriceAmount: undefined,
       unitPriceCurrency: "USD",
       notes: "",
@@ -671,7 +675,7 @@ function ReceiveTab() {
         form.reset({
           senderId: mode === "new" ? values.senderId : "",
           label: "",
-          qtyIn: 1,
+          qtyIn: undefined as unknown as number,
           unitPriceAmount: undefined,
           unitPriceCurrency: values.unitPriceCurrency,
           notes: "",

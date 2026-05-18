@@ -121,7 +121,7 @@ export async function list(orgId: string, query: ListQuery) {
 
 export async function get(orgId: string, id: string) {
   const doc = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Parti bulunamadı");
+  if (!doc) throw notFound("err:lot_not_found");
   return withFirstPhotoUrl(doc);
 }
 
@@ -129,7 +129,7 @@ export async function create(orgId: string, input: CreateLotInput) {
   const sender = await Sender.findOne(
     tenantFilter(orgId, { _id: new Types.ObjectId(input.senderId) })
   );
-  if (!sender) throw badRequest("Gönderici bulunamadı");
+  if (!sender) throw badRequest("err:sender_not_found");
 
   const doc = await InboundLot.create({
     orgId: new Types.ObjectId(orgId),
@@ -161,7 +161,7 @@ export async function update(orgId: string, id: string, input: UpdateLotInput) {
     { $set },
     { new: true, runValidators: true }
   );
-  if (!doc) throw notFound("Parti bulunamadı");
+  if (!doc) throw notFound("err:lot_not_found");
   // Wrap so the TanStack-Query cache update on the web (`qc.setQueryData`)
   // keeps the thumbnail — list/get/photo endpoints all wrap consistently.
   return withFirstPhotoUrl(doc);
@@ -169,9 +169,9 @@ export async function update(orgId: string, id: string, input: UpdateLotInput) {
 
 export async function remove(orgId: string, id: string) {
   const doc = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Parti bulunamadı");
+  if (!doc) throw notFound("err:lot_not_found");
   if (doc.qtyAvailable !== doc.qtyIn) {
-    throw conflict("Sevkiyatı olan parti silinemez");
+    throw conflict("err:lot_has_shipments");
   }
   await softDeleteOne(InboundLot, orgId, id);
 }
@@ -185,17 +185,18 @@ export async function remove(orgId: string, id: string) {
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function addPhotos(orgId: string, lotId: string, files: Express.Multer.File[]) {
-  if (files.length === 0) throw badRequest("En az bir fotoğraf yüklemelisiniz");
+  if (files.length === 0) throw badRequest("err:photo_min1");
 
   const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   const remaining = env.LOT_PHOTO_MAX_COUNT - lot.photos.length;
   if (files.length > remaining) {
-    throw conflict(
-      `Bu partiye en fazla ${env.LOT_PHOTO_MAX_COUNT} fotoğraf eklenebilir ` +
-        `(${lot.photos.length} mevcut, ${remaining} slot kaldı)`
-    );
+    throw conflict("err:photo_max_exceeded", {
+      max: env.LOT_PHOTO_MAX_COUNT,
+      current: lot.photos.length,
+      remaining,
+    });
   }
 
   // Параллельная обработка (concurrency = PHOTO_UPLOAD_CONCURRENCY). Каждая
@@ -209,7 +210,7 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
     const prepared = await mapWithLimit(files, PHOTO_UPLOAD_CONCURRENCY, async (file) => {
       const detected = await fileTypeFromBuffer(file.buffer);
       if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
-        throw validation("Sadece JPEG, PNG veya WebP yüklenebilir", {
+        throw validation("err:photo_mime_not_allowed", {
           fileName: file.originalname,
           detectedMime: detected?.mime ?? null,
         });
@@ -256,10 +257,8 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
       const stillExists = await InboundLot.exists(
         tenantFilter(orgId, { _id: new Types.ObjectId(lotId) })
       );
-      if (!stillExists) throw notFound("Parti bulunamadı");
-      throw conflict(
-        `Eşzamanlı yükleme sırasında fotoğraf limiti aşıldı (max ${env.LOT_PHOTO_MAX_COUNT})`
-      );
+      if (!stillExists) throw notFound("err:lot_not_found");
+      throw conflict("err:photo_concurrent_overflow", { max: env.LOT_PHOTO_MAX_COUNT });
     }
     return await withFirstPhotoUrl(updated);
   } catch (err) {
@@ -295,10 +294,10 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
 
 export async function removePhoto(orgId: string, lotId: string, photoId: string) {
   const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   const photo = lot.photos.find((p) => p._id.toString() === photoId);
-  if (!photo) throw notFound("Fotoğraf bulunamadı");
+  if (!photo) throw notFound("err:photo_not_found");
 
   // Delete from S3 first; if Mongo $pull fails afterwards the photo is orphaned
   // in the DB pointing to a missing object, which surfaces as a 404 on the
@@ -309,22 +308,22 @@ export async function removePhoto(orgId: string, lotId: string, photoId: string)
     { $pull: { photos: { _id: new Types.ObjectId(photoId) } } },
     { new: true }
   );
-  if (!updated) throw notFound("Parti bulunamadı");
+  if (!updated) throw notFound("err:lot_not_found");
   return withFirstPhotoUrl(updated);
 }
 
 export async function reorderPhotos(orgId: string, lotId: string, photoIds: string[]) {
   const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   if (photoIds.length !== lot.photos.length) {
-    throw badRequest("Tüm mevcut fotoğraf id'leri sırada gönderilmelidir", {
+    throw badRequest("err:photo_reorder_length_mismatch", {
       expected: lot.photos.length,
       received: photoIds.length,
     });
   }
   if (new Set(photoIds).size !== photoIds.length) {
-    throw badRequest("Sırada tekrar eden fotoğraf id'si var");
+    throw badRequest("err:photo_reorder_duplicates");
   }
 
   // Build a lookup of the existing subdocs by id; if any incoming id is
@@ -348,7 +347,7 @@ export async function reorderPhotos(orgId: string, lotId: string, photoIds: stri
   const reordered: ReturnType<typeof photoById.get>[] = [];
   for (const id of photoIds) {
     const found = photoById.get(id);
-    if (!found) throw badRequest(`Bilinmeyen fotoğraf id: ${id}`);
+    if (!found) throw badRequest("err:photo_unknown_id", { id });
     reordered.push(found);
   }
 
@@ -357,7 +356,7 @@ export async function reorderPhotos(orgId: string, lotId: string, photoIds: stri
     { $set: { photos: reordered } },
     { new: true }
   );
-  if (!updated) throw notFound("Parti bulunamadı");
+  if (!updated) throw notFound("err:lot_not_found");
   return withFirstPhotoUrl(updated);
 }
 
@@ -367,10 +366,10 @@ export async function getPhotoUrl(
   photoId: string
 ): Promise<SignedPhotoUrlResponse> {
   const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   const photo = lot.photos.find((p) => p._id.toString() === photoId);
-  if (!photo) throw notFound("Fotoğraf bulunamadı");
+  if (!photo) throw notFound("err:photo_not_found");
 
   const ttl = env.LOT_PHOTO_PRESIGNED_TTL_SECONDS;
   const url = await getPresignedGetUrl(photo.storageKey, ttl);
@@ -446,7 +445,7 @@ export async function stockBySender(orgId: string): Promise<StockBreakdownRow[]>
  */
 export async function shipmentsForLot(orgId: string, lotId: string) {
   const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   const shipments = await Shipment.find(
     tenantFilter(orgId, { "items.lotId": new Types.ObjectId(lotId) })

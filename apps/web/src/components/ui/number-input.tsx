@@ -36,6 +36,7 @@ export function NumberInput({
   ref,
   decrementLabel,
   incrementLabel,
+  placeholder,
   ...props
 }: NumberInputProps) {
   const { t } = useTranslation();
@@ -83,6 +84,9 @@ export function NumberInput({
         type="number"
         inputMode="decimal"
         value={value ?? ""}
+        // Дефолт "0" — visual hint когда поле очищено. Перебивается явно
+        // через prop, если call-site хочет своё (например "qty").
+        placeholder={placeholder ?? "0"}
         onChange={(e) => {
           const raw = e.target.value;
           // Empty input → undefined (NOT 0). Otherwise the field would

@@ -65,10 +65,10 @@ async function parseXlsx(buffer: Buffer): Promise<BulkImportRow[]> {
     const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
     await workbook.xlsx.load(ab as ArrayBuffer);
   } catch {
-    throw badRequest("Не удалось прочитать XLSX (возможно, повреждённый файл)");
+    throw badRequest("err:xlsx_corrupted");
   }
   const sheet = workbook.worksheets[0];
-  if (!sheet) throw badRequest("В XLSX нет ни одного листа");
+  if (!sheet) throw badRequest("err:xlsx_no_sheet");
 
   // Header — первая строка. ExcelJS читает row 1, getCell идёт с 1.
   const headerRow = sheet.getRow(1);
@@ -79,7 +79,7 @@ async function parseXlsx(buffer: Buffer): Promise<BulkImportRow[]> {
     const value = headerRow.getCell(c).value;
     headers[c - 1] = value == null ? "" : String(value).trim();
   }
-  if (headers.every((h) => !h)) throw badRequest("Пустая строка-заголовок");
+  if (headers.every((h) => !h)) throw badRequest("err:bulk_empty_header");
 
   const rows: BulkImportRow[] = [];
   const rowCount = sheet.actualRowCount;
@@ -98,7 +98,7 @@ async function parseXlsx(buffer: Buffer): Promise<BulkImportRow[]> {
     if (!hasValue) continue;
     rows.push({ row: r - 1, data });
     if (rows.length > BULK_IMPORT_MAX_ROWS) {
-      throw badRequest(`Превышен лимит: максимум ${BULK_IMPORT_MAX_ROWS} строк за один импорт`);
+      throw badRequest("err:bulk_rows_max", { max: BULK_IMPORT_MAX_ROWS });
     }
   }
   return rows;
@@ -109,9 +109,9 @@ function parseCsv(buffer: Buffer): BulkImportRow[] {
   // первое поле получит невидимый префикс и валидация уплывёт.
   const text = buffer.toString("utf8").replace(/^\uFEFF/, "");
   const lines = parseCsvLines(text);
-  if (lines.length === 0) throw badRequest("Пустой CSV");
+  if (lines.length === 0) throw badRequest("err:csv_empty");
   const headers = lines[0].map((h) => h.trim());
-  if (headers.every((h) => !h)) throw badRequest("Пустая строка-заголовок");
+  if (headers.every((h) => !h)) throw badRequest("err:bulk_empty_header");
 
   const rows: BulkImportRow[] = [];
   for (let i = 1; i < lines.length; i += 1) {
@@ -128,7 +128,7 @@ function parseCsv(buffer: Buffer): BulkImportRow[] {
     if (!hasValue) continue;
     rows.push({ row: i, data });
     if (rows.length > BULK_IMPORT_MAX_ROWS) {
-      throw badRequest(`Превышен лимит: максимум ${BULK_IMPORT_MAX_ROWS} строк за один импорт`);
+      throw badRequest("err:bulk_rows_max", { max: BULK_IMPORT_MAX_ROWS });
     }
   }
   return rows;

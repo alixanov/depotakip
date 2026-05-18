@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CURRENCIES } from "../constants.js";
 
-export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, "Geçersiz id formatı");
+export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:invalid_id");
 
 export const idParamSchema = z.object({ id: objectIdSchema });
 
@@ -29,7 +29,7 @@ export const dateRangeQuerySchema = z.object({
 export const phoneSchema = z
   .string()
   .trim()
-  .regex(/^\+?[\d\s\-()]{5,40}$/, "Geçersiz telefon");
+  .regex(/^\+?[\d\s\-()]{5,40}$/, "validation:invalid_phone");
 
 /**
  * Telegram username. Accepts both `username` and `@username`; strips the
@@ -49,10 +49,7 @@ export const telegramUsernameSchema = z.preprocess(
   },
   z
     .string()
-    .regex(
-      /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/,
-      "5–32 karakter, harfle başlar, sadece harf/rakam/alt çizgi"
-    )
+    .regex(/^[a-zA-Z][a-zA-Z0-9_]{4,31}$/, "validation:telegram_username_format")
     .nullable()
     .optional()
 );

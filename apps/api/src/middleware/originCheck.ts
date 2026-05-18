@@ -16,13 +16,13 @@ export function originCheck(req: Request, _res: Response, next: NextFunction): v
   if (env.NODE_ENV === "test") return next();
 
   const header = req.get("origin") || req.get("referer");
-  if (!header) return next(forbidden("Origin header required"));
+  if (!header) return next(forbidden("err:origin_required"));
 
   let originUrl: URL;
   try {
     originUrl = new URL(header);
   } catch {
-    return next(forbidden("Malformed Origin"));
+    return next(forbidden("err:origin_malformed"));
   }
 
   const allowed = ALLOWED_ORIGINS.some((allow) => {
@@ -33,6 +33,6 @@ export function originCheck(req: Request, _res: Response, next: NextFunction): v
     }
   });
 
-  if (!allowed) return next(forbidden("Origin not allowed"));
+  if (!allowed) return next(forbidden("err:origin_not_allowed"));
   next();
 }

@@ -19,7 +19,7 @@ export const receiptPdf = async (req: Request<IdParams>, res: Response): Promise
   const lot = await InboundLot.findOne(
     tenantFilter(req.orgId, { _id: new Types.ObjectId(req.params.id) })
   );
-  if (!lot) throw notFound("Parti bulunamadı");
+  if (!lot) throw notFound("err:lot_not_found");
 
   // Tenant-scope the lookup even though `lot` is already org-checked —
   // matches the project-wide convention and also filters out soft-deleted

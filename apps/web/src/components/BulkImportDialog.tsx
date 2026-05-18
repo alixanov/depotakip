@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api/client";
+import { localizedMessage } from "@/lib/errors";
 import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
@@ -77,7 +77,7 @@ export function BulkImportDialog({
       }
     },
     onError: (err) => {
-      toast.error(err instanceof ApiError ? err.message : t("error"));
+      toast.error(localizedMessage(err, t));
     },
   });
 
@@ -240,14 +240,35 @@ export function BulkImportDialog({
                   {t("import:failed_title", { count: report.failed.length })}
                 </div>
                 <ul className="max-h-64 divide-y overflow-y-auto rounded-md border text-xs">
-                  {report.failed.map((f) => (
-                    <li key={f.row} className="flex gap-2 p-2">
-                      <span className="shrink-0 font-mono font-semibold text-muted-foreground">
-                        #{f.row}
-                      </span>
-                      <span className="text-foreground/90">{f.reason}</span>
-                    </li>
-                  ))}
+                  {report.failed.map((f) => {
+                    // Display priority: zod-issues (если есть) → translate
+                    // каждое отдельно с validation:* префиксом; иначе t(code,
+                    // params); иначе сырой reason c backend.
+                    let text: string;
+                    if (f.issues && f.issues.length > 0) {
+                      text = f.issues
+                        .map((iss) => {
+                          const msg = iss.message.startsWith("validation:")
+                            ? t(iss.message)
+                            : iss.message;
+                          return `${iss.path}: ${msg}`;
+                        })
+                        .join("; ");
+                    } else if (f.code) {
+                      const translated = t(f.code, f.params);
+                      text = translated !== f.code ? translated : f.reason;
+                    } else {
+                      text = f.reason;
+                    }
+                    return (
+                      <li key={f.row} className="flex gap-2 p-2">
+                        <span className="shrink-0 font-mono font-semibold text-muted-foreground">
+                          #{f.row}
+                        </span>
+                        <span className="text-foreground/90">{text}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

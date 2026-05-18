@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { ApiError } from "@/lib/api/client";
+import { localizedMessage } from "@/lib/errors";
+import { translateValidationKey } from "@/lib/zod-i18n";
 
 /**
  * Bridges server validation into react-hook-form. Returns a callback that:
@@ -22,16 +24,20 @@ export function useApiFormErrors<T extends FieldValues>(form: UseFormReturn<T>) 
     const names = Object.keys(fields);
 
     names.forEach((name, i) => {
+      // Backend bubbles zod-сообщения "as-is" в fields/details. Если это
+      // наш ключ "validation:xxx" — переводим перед setError, иначе RHF
+      // прокинет raw ключ в UI.
       form.setError(
         name as Path<T>,
-        { type: "server", message: fields[name] },
+        { type: "server", message: translateValidationKey(fields[name]) },
         i === 0 ? { shouldFocus: true } : undefined
       );
     });
 
     // If every error was mapped to a field, suppress the top banner —
-    // the fields themselves carry the message. Otherwise surface ApiError.message.
-    return names.length > 0 ? "" : err.message;
+    // the fields themselves carry the message. Otherwise surface the
+    // localized AppError code (err:xxx) or fall back to err.message.
+    return names.length > 0 ? "" : localizedMessage(err, t);
   };
 }
 

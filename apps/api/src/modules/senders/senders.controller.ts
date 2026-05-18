@@ -41,7 +41,7 @@ export const remove = async (req: Request<IdParams>, res: Response): Promise<voi
 
 export const bulkImport = async (req: Request, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
-  if (!req.file) throw badRequest("Поле `file` обязательно (multipart/form-data)");
+  if (!req.file) throw badRequest("err:file_required");
   const parsed = await parseBulkImportFile(
     req.file.buffer,
     req.file.originalname,

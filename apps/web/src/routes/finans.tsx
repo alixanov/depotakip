@@ -65,9 +65,9 @@ const paymentFormSchema = z.object({
   kind: z.enum(TRANSACTION_KINDS),
   counterparty: z.object({
     type: z.enum(["carrier", "sender"]),
-    id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Karşı taraf seçin"),
+    id: z.string().regex(/^[0-9a-fA-F]{24}$/, "validation:counterparty_required"),
   }),
-  amount: z.coerce.number().positive("Tutar > 0 olmalı"),
+  amount: z.coerce.number().positive("validation:amount_positive"),
   currency: z.enum(CURRENCIES),
   method: z.enum(PAYMENT_METHODS),
   notes: z.string().trim().max(1000).default(""),

@@ -240,19 +240,35 @@ export interface PaginatedResponse<T> {
   pagination: { page: number; limit: number; total: number; hasMore: boolean };
 }
 
-/** Отчёт по bulk-import: что создано/обновлено/пропущено + список failed-строк
- *  с человеко-читаемой причиной. row нумеруется с 1 (без header-строки). */
+/** Отчёт по bulk-import: что создано/обновлено/пропущено + список failed-строк.
+ *  row нумеруется с 1 (без header-строки).
+ *
+ *  failed[i]:
+ *  - `reason` — захардкоженный fallback для логов и старых клиентов.
+ *  - `code` (опц.) — `err:xxx` для i18n.t(code, params) на клиенте.
+ *  - `params` — параметры интерполяции.
+ *  - `issues` — для zod-валидации: массив `{path, message}` (message может
+ *    быть `validation:xxx` ключом, который клиент переведёт сам). */
 export interface BulkImportReport {
   total: number;
   created: number;
   updated: number;
   skippedDuplicates: number;
-  failed: { row: number; reason: string }[];
+  failed: {
+    row: number;
+    reason: string;
+    code?: string;
+    params?: Record<string, unknown>;
+    issues?: { path: string; message: string }[];
+  }[];
 }
 
 export interface ApiErrorBody {
   error: string;
   code?: string;
+  /** Параметры для i18n-интерполяции (`{{count}}`, `{{max}}`). Backend
+   *  передаёт их при throw notFound("err:xxx", { count }). */
+  params?: Record<string, unknown>;
   details?: unknown;
   requestId?: string;
   fields?: Record<string, string>;

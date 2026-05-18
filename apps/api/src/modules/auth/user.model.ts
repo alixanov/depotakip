@@ -76,7 +76,7 @@ export async function loadRoleRef(roleId: Types.ObjectId): Promise<UserRoleRef> 
   const role = await Role.findById(roleId);
   if (!role) {
     logger.error({ roleId: roleId.toString() }, "user_role_missing");
-    throw unauthorized("Atanmış rol artık mevcut değil — yönetici ile iletişime geçin");
+    throw unauthorized("err:user_role_missing");
   }
   return {
     id: role._id.toString(),

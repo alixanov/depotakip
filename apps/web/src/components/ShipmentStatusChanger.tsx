@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { STATUSES, type Shipment, type Status } from "@sadiyakargo/shared";
 import { Button } from "@/components/ui/button";
 import { shipmentsApi } from "@/lib/api/shipments";
-import { ApiError } from "@/lib/api/client";
+import { localizedMessage } from "@/lib/errors";
 import { useRealtimeStore } from "@/stores/realtime";
 import { celebrate } from "@/lib/confetti";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ export function ShipmentStatusChanger({
       if (newStatus === "teslim" && shipment.status !== "teslim") celebrate();
       onComplete?.();
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : t("error")),
+    onError: (err) => setError(localizedMessage(err, t)),
   });
 
   const dirty = newStatus !== shipment.status;

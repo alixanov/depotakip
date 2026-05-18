@@ -34,7 +34,7 @@ export const createTransactionSchema = z
       id: objectIdSchema,
     }),
     shipmentId: objectIdSchema.nullable().optional(),
-    amount: z.coerce.number().int().positive("Tutar > 0 olmalı"),
+    amount: z.coerce.number().int().positive("validation:amount_positive"),
     currency: z.enum(CURRENCIES),
     direction: z.enum(["debit", "credit"]),
     txDate: z.string().date().optional(),
@@ -47,7 +47,7 @@ export const createTransactionSchema = z
       return expected === "both" || expected === direction;
     },
     {
-      message: "kind ve direction birbiriyle uyumsuz",
+      message: "validation:tx_kind_direction_mismatch",
       path: ["direction"],
     }
   )
@@ -57,7 +57,7 @@ export const createTransactionSchema = z
       return expected === "any" || expected === counterparty.type;
     },
     {
-      message: "kind ve counterparty.type birbiriyle uyumsuz",
+      message: "validation:tx_kind_party_mismatch",
       path: ["counterparty", "type"],
     }
   );

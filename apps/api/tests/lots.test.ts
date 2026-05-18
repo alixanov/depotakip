@@ -239,7 +239,7 @@ describe("/lots/:id/photos", () => {
         contentType: "image/jpeg",
       })
       .expect(422);
-    expect(res.body.code).toBe("VALIDATION");
+    expect(res.body.code).toBe("err:photo_mime_not_allowed");
   });
 
   it("rejects exceeding LOT_PHOTO_MAX_COUNT", async () => {

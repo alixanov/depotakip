@@ -39,7 +39,7 @@ export async function create(input: CreateExchangeRateInput) {
       "code" in err &&
       (err as { code: number }).code === 11000
     ) {
-      throw conflict("Bu tarihte zaten kur var");
+      throw conflict("err:exchange_rate_duplicate");
     }
     throw err;
   }
@@ -47,7 +47,7 @@ export async function create(input: CreateExchangeRateInput) {
 
 export async function remove(id: string) {
   const doc = await ExchangeRate.findByIdAndDelete(id);
-  if (!doc) throw notFound("Kur kaydı bulunamadı");
+  if (!doc) throw notFound("err:exchange_rate_not_found");
   // Удалённый курс мог быть последним валидным для своей даты;
   // дроп всего кэша дешевле, чем выяснять какие ключи затронуты.
   CACHE.clear();
@@ -89,7 +89,7 @@ export async function convertToUsd(
     .sort({ rateDate: -1 })
     .lean();
   if (!doc) {
-    throw notFound(`${currency} için kur bulunamadı`);
+    throw notFound("err:exchange_rate_for_currency_not_found", { currency });
   }
 
   CACHE.set(key, doc.rateToUsd);

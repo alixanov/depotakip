@@ -74,11 +74,11 @@ export async function login(
 ): Promise<IssuedTokens> {
   // email уже .trim().toLowerCase() через loginSchema/emailSchema.
   const user = await User.findOne({ email, deletedAt: null });
-  if (!user) throw unauthorized("Email veya şifre hatalı");
-  if (!user.active) throw unauthorized("Hesap devre dışı");
+  if (!user) throw unauthorized("err:invalid_credentials");
+  if (!user.active) throw unauthorized("err:account_disabled");
 
   const ok = await compare(password, user.passwordHash);
-  if (!ok) throw unauthorized("Email veya şifre hatalı");
+  if (!ok) throw unauthorized("err:invalid_credentials");
 
   user.lastLoginAt = new Date();
   await user.save();
@@ -91,11 +91,11 @@ export async function refresh(refreshTokenJwt: string, ctx: AuthContext): Promis
   try {
     payload = verifyRefreshToken(refreshTokenJwt);
   } catch {
-    throw unauthorized("Geçersiz refresh token");
+    throw unauthorized("err:invalid_refresh_token");
   }
 
   const record = await RefreshToken.findOne({ tokenId: payload.tokenId });
-  if (!record) throw unauthorized("Token bulunamadı");
+  if (!record) throw unauthorized("err:refresh_token_not_found");
 
   if (record.revokedAt) {
     // Replay attack — invalidate all tokens for this user (defence in depth).
@@ -103,16 +103,16 @@ export async function refresh(refreshTokenJwt: string, ctx: AuthContext): Promis
       { userId: record.userId, revokedAt: null },
       { $set: { revokedAt: new Date() } }
     );
-    throw unauthorized("Token yeniden kullanım tespit edildi");
+    throw unauthorized("err:refresh_token_replay");
   }
 
   if (record.expiresAt.getTime() < Date.now()) {
-    throw unauthorized("Refresh token süresi doldu");
+    throw unauthorized("err:refresh_token_expired");
   }
 
   const user = await User.findById(record.userId);
   if (!user || !user.active || user.deletedAt) {
-    throw unauthorized("Kullanıcı bulunamadı");
+    throw unauthorized("err:user_not_found");
   }
 
   return issueTokens(user, { ...ctx, replacesTokenId: record.tokenId });
@@ -130,7 +130,7 @@ export async function logout(refreshTokenJwt: string | undefined): Promise<void>
 
 export async function me(userId: string) {
   const user = await User.findOne({ _id: userId, deletedAt: null });
-  if (!user) throw notFound("Kullanıcı bulunamadı");
+  if (!user) throw notFound("err:user_not_found");
   const role = await loadRoleRef(user.roleId);
   return user.toSafeJSON(role);
 }
@@ -166,11 +166,11 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
   const record = await PasswordResetToken.findOne({ tokenHash });
   if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
-    throw unauthorized("Token geçersiz veya süresi dolmuş");
+    throw unauthorized("err:reset_token_invalid");
   }
 
   const user = await User.findById(record.userId);
-  if (!user || user.deletedAt) throw notFound("Kullanıcı bulunamadı");
+  if (!user || user.deletedAt) throw notFound("err:user_not_found");
 
   user.passwordHash = await hash(newPassword);
   user.mustChangePassword = false;
@@ -192,10 +192,10 @@ export async function changePassword(
   newPassword: string
 ): Promise<void> {
   const user = await User.findOne({ _id: userId, deletedAt: null });
-  if (!user) throw notFound("Kullanıcı bulunamadı");
+  if (!user) throw notFound("err:user_not_found");
 
   const ok = await compare(currentPassword, user.passwordHash);
-  if (!ok) throw unauthorized("Mevcut şifre hatalı");
+  if (!ok) throw unauthorized("err:current_password_wrong");
 
   user.passwordHash = await hash(newPassword);
   user.mustChangePassword = false;
@@ -235,7 +235,7 @@ export async function ensureAdmin(args: {
       "code" in err &&
       (err as { code: number }).code === 11000
     ) {
-      throw conflict("Email zaten kayıtlı");
+      throw conflict("err:email_taken");
     }
     throw err;
   }

@@ -45,7 +45,7 @@ describe("POST /auth/login", () => {
       .post(apiPath("/auth/login"))
       .send({ email: "ghost@example.com", password: "whatever" })
       .expect(401);
-    expect(res.body.error).toMatch(/email|şifre/i);
+    expect(res.body.code).toBe("err:invalid_credentials");
   });
 });
 

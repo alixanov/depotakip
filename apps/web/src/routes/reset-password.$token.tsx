@@ -19,7 +19,7 @@ const formSchema = z
     confirm: z.string().min(1),
   })
   .refine((d) => d.password === d.confirm, {
-    message: "Şifreler uyuşmuyor",
+    message: "validation:passwords_mismatch",
     path: ["confirm"],
   });
 

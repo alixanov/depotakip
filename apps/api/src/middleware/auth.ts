@@ -17,7 +17,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) {
-    next(unauthorized("Token gerekli"));
+    next(unauthorized("err:token_required"));
     return;
   }
   try {
@@ -33,7 +33,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
       : [];
     next();
   } catch {
-    next(unauthorized("Geçersiz veya süresi dolmuş token"));
+    next(unauthorized("err:token_invalid"));
   }
 }
 
@@ -50,7 +50,7 @@ export function requirePermission(...required: PermissionKey[]) {
     }
     for (const key of required) {
       if (!perms.includes(key)) {
-        next(forbidden(`Yetkisiz işlem (gerekli: ${key})`));
+        next(forbidden("err:permission_required", { key }));
         return;
       }
     }
@@ -66,7 +66,7 @@ export function requireAnyPermission(...required: PermissionKey[]) {
       return;
     }
     if (!required.some((k) => perms.includes(k))) {
-      next(forbidden(`Yetkisiz işlem (gerekli: ${required.join(" | ")})`));
+      next(forbidden("err:permission_required_any", { keys: required.join(" | ") }));
       return;
     }
     next();

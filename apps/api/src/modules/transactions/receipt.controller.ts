@@ -19,7 +19,7 @@ export const paymentReceiptPdf = async (req: Request<IdParams>, res: Response): 
   const tx = await Transaction.findOne(
     tenantFilter(req.orgId, { _id: new Types.ObjectId(req.params.id) })
   );
-  if (!tx) throw notFound("Tx bulunamadı");
+  if (!tx) throw notFound("err:transaction_not_found");
 
   const party =
     tx.counterparty.type === "carrier"

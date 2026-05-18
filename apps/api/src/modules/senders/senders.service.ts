@@ -31,7 +31,7 @@ export async function list(orgId: string, query: ListQuery) {
 
 export async function get(orgId: string, id: string) {
   const doc = await Sender.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Gönderici bulunamadı");
+  if (!doc) throw notFound("err:sender_not_found");
   return doc.toClient();
 }
 
@@ -39,7 +39,7 @@ export async function create(orgId: string, input: CreateSenderInput) {
   // Защита от случайных дубликатов в одной орг — индекс не unique
   // (исторически могли существовать дубликаты), валидация на уровне service.
   const existing = await Sender.findOne(tenantFilter(orgId, { phone: input.phone }));
-  if (existing) throw conflict("Bu telefon numarası başka bir göndericiye atanmış");
+  if (existing) throw conflict("err:phone_taken_sender");
   const doc = await Sender.create({ orgId: new Types.ObjectId(orgId), ...input });
   return doc.toClient();
 }
@@ -50,20 +50,20 @@ export async function update(orgId: string, id: string, input: UpdateSenderInput
     const clash = await Sender.findOne(
       tenantFilter(orgId, { phone: input.phone, _id: { $ne: new Types.ObjectId(id) } })
     );
-    if (clash) throw conflict("Bu telefon numarası başka bir göndericiye atanmış");
+    if (clash) throw conflict("err:phone_taken_sender");
   }
   const doc = await Sender.findOneAndUpdate(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) }),
     { $set: input },
     { new: true, runValidators: true }
   );
-  if (!doc) throw notFound("Gönderici bulunamadı");
+  if (!doc) throw notFound("err:sender_not_found");
   return doc.toClient();
 }
 
 export async function remove(orgId: string, id: string) {
   const doc = await softDeleteOne(Sender, orgId, id);
-  if (!doc) throw notFound("Gönderici bulunamadı");
+  if (!doc) throw notFound("err:sender_not_found");
 }
 
 /** Колонки для импорта senders. Используется и парсером (валидация имён),
@@ -116,17 +116,26 @@ export async function bulkImport(
     };
     const parsed = createSenderSchema.safeParse(input);
     if (!parsed.success) {
+      const issues = parsed.error.issues.map((iss) => ({
+        path: iss.path.join(".") || "?",
+        message: iss.message,
+      }));
       report.failed.push({
         row,
-        reason: parsed.error.issues
-          .map((iss) => `${iss.path.join(".") || "?"}: ${iss.message}`)
-          .join("; "),
+        reason: issues.map((i) => `${i.path}: ${i.message}`).join("; "),
+        code: "err:bulk_row_invalid",
+        issues,
       });
       continue;
     }
     const { phone } = parsed.data;
     if (seenInBatch.has(phone)) {
-      report.failed.push({ row, reason: `Дубликат phone в файле (${phone})` });
+      report.failed.push({
+        row,
+        reason: `Дубликат phone в файле (${phone})`,
+        code: "err:bulk_dup_phone_in_file",
+        params: { phone },
+      });
       continue;
     }
     seenInBatch.add(phone);
@@ -145,6 +154,7 @@ export async function bulkImport(
         report.failed.push({
           row,
           reason: err instanceof Error ? err.message : "Ошибка обновления",
+          code: "err:bulk_update_failed",
         });
       }
       continue;
@@ -156,6 +166,7 @@ export async function bulkImport(
       report.failed.push({
         row,
         reason: err instanceof Error ? err.message : "Ошибка создания",
+        code: "err:bulk_create_failed",
       });
     }
   }

@@ -11,7 +11,7 @@ const permissionKeySchema = z
   .trim()
   .min(2)
   .max(80)
-  .regex(/^[a-z0-9_]+(:[a-z0-9_]+)+$/, "Format: module:action (lowercase, underscores)");
+  .regex(/^[a-z0-9_]+(:[a-z0-9_]+)+$/, "validation:permission_key_format");
 
 export const createPermissionSchema = z.object({
   key: permissionKeySchema,

@@ -58,7 +58,7 @@ export async function list(orgId: string, query: ListQuery) {
 
 export async function get(orgId: string, id: string) {
   const doc = await Shipment.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Gönderi bulunamadı");
+  if (!doc) throw notFound("err:shipment_not_found");
   return doc.toClient();
 }
 
@@ -76,7 +76,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
   const carrier = await Carrier.findOne(
     tenantFilter(orgId, { _id: new Types.ObjectId(input.carrierId) })
   );
-  if (!carrier) throw badRequest("Kargocu bulunamadı");
+  if (!carrier) throw badRequest("err:carrier_not_found");
 
   const session = await mongoose.startSession();
   try {
@@ -103,7 +103,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
           { new: true, session }
         );
         if (!updated) {
-          throw conflict(`Yetersiz stok: parti ${item.lotId} (istenen ${item.qty})`);
+          throw conflict("err:insufficient_stock", { lotId: item.lotId, qty: item.qty });
         }
         lotSenderMap.set(item.lotId, updated.senderId.toString());
         const newStatus = updated.qtyAvailable === 0 ? "fully_shipped" : "partially_shipped";
@@ -207,7 +207,7 @@ export async function updateStatus(
   comment: string
 ) {
   const doc = await Shipment.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
-  if (!doc) throw notFound("Gönderi bulunamadı");
+  if (!doc) throw notFound("err:shipment_not_found");
   if (doc.status === toStatus) return doc.toClient();
 
   const fromStatus = doc.status;
@@ -352,7 +352,7 @@ const STATUS_TO_TEMPLATE: Partial<
 
 export async function findByTrackingToken(token: string) {
   const doc = await Shipment.findOne({ publicTrackingToken: token, deletedAt: null });
-  if (!doc) throw notFound("Takip kodu geçersiz");
+  if (!doc) throw notFound("err:tracking_token_invalid");
   return doc.toPublicJSON();
 }
 
