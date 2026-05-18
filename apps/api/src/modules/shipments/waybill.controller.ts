@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createElement } from "react";
+import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { WaybillDocument, qrDataUrl, renderToStream } from "@sadiyakargo/pdf-templates";
-import { asyncHandler } from "../../lib/asyncHandler.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
@@ -14,7 +14,7 @@ import { InboundLot } from "../lots/lot.model.js";
 
 type IdParams = { id: string };
 
-export const waybillPdf = asyncHandler<IdParams>(async (req, res) => {
+export const waybillPdf = async (req: Request<IdParams>, res: Response): Promise<void> => {
   if (!req.orgId) throw unauthorized();
 
   const shipment = await Shipment.findOne(
@@ -75,4 +75,4 @@ export const waybillPdf = asyncHandler<IdParams>(async (req, res) => {
     else res.destroy(err);
   });
   stream.pipe(res as unknown as NodeJS.WritableStream);
-});
+};
