@@ -26,13 +26,17 @@ export function getQueue(): Queue | null {
   return queue;
 }
 
-export function startWorker(handler: (data: any) => Promise<void>): Worker | null {
+export function startWorker(
+  handler: (data: any) => Promise<void>,
+  options: { concurrency?: number } = {}
+): Worker | null {
   if (worker) return worker;
   const conn = getConnection();
   if (!conn) return null;
   worker = new Worker(QUEUE_NAME, async (job: Job) => handler(job.data), {
     connection: conn,
     autorun: true,
+    concurrency: options.concurrency ?? 1,
   });
   worker.on("failed", (job, err) => {
     logger.error({ err, jobId: job?.id }, "notification_job_failed");

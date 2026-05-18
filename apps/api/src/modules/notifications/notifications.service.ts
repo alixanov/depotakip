@@ -84,11 +84,20 @@ export async function enqueue(input: EnqueueInput): Promise<string | null> {
 
   const queue = getQueue();
   if (queue) {
-    await queue.add(
-      "send",
-      { logId: log._id.toString() },
-      { attempts: MAX_ATTEMPTS, backoff: { type: "exponential", delay: BACKOFF_SEC[0] * 1000 } }
-    );
+    // attempts:1 — BullMQ исполняет один проход; ретраи делает processOne
+    // через manual re-enqueue с backoff (см. ниже), потому что throttle
+    // зависит от log.attempts, а не от количества запусков BullMQ.
+    // try/catch — Redis-сбой не должен валить основной запрос
+    // (PATCH /shipments/:id/status и т.п.). Лог остаётся в "queued";
+    // оператор увидит в /admin/notifications, ручной retry — через UI.
+    try {
+      await queue.add("send", { logId: log._id.toString() }, { attempts: 1 });
+    } catch (err) {
+      logger.error(
+        { err, logId: log._id.toString(), templateKey: input.templateKey },
+        "notification_enqueue_failed"
+      );
+    }
   } else {
     // No Redis — process synchronously (dev / tests / first run).
     await processOne(log._id.toString());

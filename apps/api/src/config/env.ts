@@ -55,6 +55,11 @@ const envSchema = z.object({
   // synchronous in-process processing (no queue persistence).
   REDIS_URL: z.string().optional(),
 
+  // Параллельность BullMQ воркера для notifications. 1 — потолок для
+  // типичной нагрузки (≤10 уведомлений/час). Поднимать при массовых
+  // рассылках или bulk-смене статусов. Игнорируется, если REDIS_URL пуст.
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(1),
+
   // Telegram bot — leave token empty to log payloads instead of sending.
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_USERNAME: z.string().optional(),
