@@ -136,6 +136,7 @@ export interface ShipmentItem {
   id: string;
   lotId: string;
   qty: number;
+  senderCharge: Money | null;
 }
 
 export interface ShipmentStatusEvent {
@@ -166,7 +167,7 @@ export interface Shipment {
 export interface Transaction {
   id: string;
   kind: TransactionKind;
-  counterparty: { type: "carrier"; id: string };
+  counterparty: { type: "carrier" | "sender"; id: string };
   shipmentId: string | null;
   amount: number;
   currency: Currency;

@@ -6,7 +6,7 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CURRENCIES, type CreateShipmentInput } from "@sadiyakargo/shared";
-import { ChevronDown, ImageIcon, Plus, Trash2, UserPlus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +19,10 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { lotsApi } from "@/lib/api/lots";
 import { carriersApi } from "@/lib/api/carriers";
-import { sendersApi } from "@/lib/api/senders";
 import { shipmentsApi } from "@/lib/api/shipments";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requireRole } from "@/lib/guards";
-import { formatDate, formatMoneyObject, isoDateOnly, toMinor } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatDate, isoDateOnly, toMinor } from "@/lib/format";
 
 /**
  * Form values use *display* units (e.g. 50.00 USD). Conversion to minor units
@@ -50,6 +48,8 @@ const cikisFormSchema = z.object({
       z.object({
         lotId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Parti seçin"),
         qty: z.coerce.number().int().positive("Adet > 0"),
+        senderChargeAmount: z.coerce.number().nonnegative().optional(),
+        senderChargeCurrency: z.enum(CURRENCIES).optional(),
       })
     )
     .min(1, "En az bir mal eklemeli"),
@@ -80,14 +80,6 @@ function CreateShipmentPage() {
     queryKey: ["lots", "available"],
     queryFn: () => lotsApi.list({ limit: 200, available: true }),
   });
-  // Senders are loaded just to resolve the lot.senderId → fullName mapping
-  // shown in the lot-picker combobox option.
-  const sendersQuery = useQuery({
-    queryKey: ["senders", "all"],
-    queryFn: () => sendersApi.list({ limit: 200 }),
-  });
-  const senderName = (id: string) =>
-    sendersQuery.data?.data.find((s) => s.id === id)?.fullName ?? "—";
 
   const form = useForm<CikisFormValues>({
     resolver: zodResolver(cikisFormSchema),
@@ -96,18 +88,11 @@ function CreateShipmentPage() {
       recipient: { name: "", phone: "", addressTr: "" },
       shipmentDate: isoDateOnly(),
       carrierFee: { amount: 0, currency: "USD" },
-      items: [{ lotId: "", qty: 1 }],
+      items: [{ lotId: "", qty: 1, senderChargeAmount: undefined, senderChargeCurrency: "USD" }],
       notes: "",
     },
   });
   const handleApiError = useApiFormErrors(form);
-
-  // Recipient is optional. Hide the three input fields by default; only
-  // expand them when the operator clicks "Add recipient" (or when the form
-  // already contains a value — e.g. after re-opening for editing).
-  const [recipientOpen, setRecipientOpen] = useState<boolean>(
-    () => !!form.getValues("recipient.name")
-  );
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -143,10 +128,27 @@ function CreateShipmentPage() {
       items: values.items.map((it) => ({
         lotId: it.lotId,
         qty: it.qty,
+        senderCharge:
+          it.senderChargeAmount && it.senderChargeAmount > 0
+            ? {
+                amount: toMinor(it.senderChargeAmount),
+                currency: it.senderChargeCurrency ?? "USD",
+              }
+            : null,
       })),
       notes: values.notes,
     };
     create.mutate(payload);
+  };
+
+  const lotLabel = (lotId: string): string => {
+    const lot = lotsQuery.data?.data.find((l) => l.id === lotId);
+    if (!lot) return "—";
+    const meta = t("cikis:items_label_per_lot", {
+      qty: lot.qtyAvailable,
+      date: formatDate(lot.receivedAt),
+    });
+    return lot.label ? `${lot.label} — ${meta}` : meta;
   };
 
   return (
@@ -208,57 +210,29 @@ function CreateShipmentPage() {
             </div>
           </div>
 
-          {/* Recipient (optional) — collapsed by default because most shipments
-              go to a repeat carrier route and the fields are noise. The toggle
-              row keeps the section discoverable without occupying real-estate. */}
-          <div className="rounded-lg border">
-            <button
-              type="button"
-              onClick={() => setRecipientOpen((v) => !v)}
-              aria-expanded={recipientOpen}
-              aria-controls="recipient-fields"
-              className={cn(
-                "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left",
-                "text-xs font-semibold uppercase tracking-wide text-muted-foreground",
-                "transition-colors hover:bg-muted/50",
-                recipientOpen && "border-b"
-              )}
-            >
-              <span className="flex items-center gap-2">
-                {recipientOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <UserPlus className="h-3.5 w-3.5" />
-                )}
-                {t("cikis:recipient_legend")}
-              </span>
-              {!recipientOpen && (
-                <span className="font-normal normal-case text-muted-foreground/70">
-                  {t("cikis:recipient_add_hint")}
-                </span>
-              )}
-            </button>
-            {recipientOpen && (
-              <div id="recipient-fields" className="grid gap-3 p-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_name")}</Label>
-                  <Input {...form.register("recipient.name")} autoComplete="name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_phone")}</Label>
-                  <Input
-                    {...form.register("recipient.phone")}
-                    placeholder="+90..."
-                    autoComplete="tel"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_addressTr")}</Label>
-                  <Input {...form.register("recipient.addressTr")} autoComplete="street-address" />
-                </div>
+          <fieldset className="rounded-lg border p-3">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("cikis:recipient_legend")}
+            </legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>{t("cikis:recipient_name")}</Label>
+                <Input {...form.register("recipient.name")} autoComplete="name" />
               </div>
-            )}
-          </div>
+              <div className="space-y-1.5">
+                <Label>{t("cikis:recipient_phone")}</Label>
+                <Input
+                  {...form.register("recipient.phone")}
+                  placeholder="+90..."
+                  autoComplete="tel"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("cikis:recipient_addressTr")}</Label>
+                <Input {...form.register("recipient.addressTr")} autoComplete="street-address" />
+              </div>
+            </div>
+          </fieldset>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -267,7 +241,14 @@ function CreateShipmentPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ lotId: "", qty: 1 })}
+                onClick={() =>
+                  append({
+                    lotId: "",
+                    qty: 1,
+                    senderChargeAmount: undefined,
+                    senderChargeCurrency: "USD",
+                  })
+                }
               >
                 <Plus className="mr-1 h-3 w-3" />
                 {t("cikis:items_add")}
@@ -301,75 +282,31 @@ function CreateShipmentPage() {
                             getLabel={(l) => l.label || `#${l.id.slice(-6)}`}
                             getSearchKeys={(l) => [
                               l.label,
-                              senderName(l.senderId),
                               formatDate(l.receivedAt),
                               String(l.qtyAvailable),
                             ]}
                             renderOption={(l) => (
-                              // Row layout: 36px thumbnail · label+sender (flex-1)
-                              // · price · qty · date. On narrow viewports the
-                              // meta column wraps under the label.
-                              <div className="flex min-w-0 items-center gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                                  {l.firstPhotoUrl ? (
-                                    <img
-                                      src={l.firstPhotoUrl}
-                                      alt=""
-                                      loading="lazy"
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <ImageIcon
-                                      className="h-4 w-4 text-muted-foreground/60"
-                                      aria-hidden="true"
-                                    />
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-baseline gap-2">
-                                    <span className="truncate text-sm font-medium">
-                                      {l.label || (
-                                        <span className="font-mono text-muted-foreground">
-                                          #{l.id.slice(-6)}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="truncate text-xs text-muted-foreground">
-                                    {senderName(l.senderId)} · {formatDate(l.receivedAt)}
-                                  </div>
-                                </div>
-                                <div className="flex shrink-0 flex-col items-end text-xs">
-                                  {l.unitPrice ? (
-                                    <span className="tabular-nums">
-                                      {formatMoneyObject(l.unitPrice)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                  <span className="tabular-nums text-muted-foreground">
+                              <div className="flex min-w-0 items-baseline justify-between gap-2">
+                                <span className="min-w-0 truncate">
+                                  <span className="font-mono text-xs text-muted-foreground">
+                                    #{l.id.slice(-6)}
+                                  </span>{" "}
+                                  {l.label && <span className="font-medium">{l.label} · </span>}
+                                  <span className={l.label ? "" : "font-medium"}>
                                     {l.qtyAvailable} {t("depo:form_qty").toLowerCase()}
                                   </span>
-                                </div>
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {formatDate(l.receivedAt)}
+                                </span>
                               </div>
                             )}
                             renderSelected={(l) => (
-                              <span className="flex min-w-0 items-center gap-2">
-                                {l.firstPhotoUrl && (
-                                  <img
-                                    src={l.firstPhotoUrl}
-                                    alt=""
-                                    loading="lazy"
-                                    className="h-5 w-5 shrink-0 rounded object-cover"
-                                  />
-                                )}
-                                <span className="truncate">
-                                  {l.label || `#${l.id.slice(-6)}`}{" "}
-                                  <span className="text-muted-foreground">
-                                    · {senderName(l.senderId)} · {l.qtyAvailable}{" "}
-                                    {t("depo:form_qty").toLowerCase()}
-                                  </span>
-                                </span>
+                              <span>
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  #{l.id.slice(-6)}
+                                </span>{" "}
+                                — {lotLabel(l.id)}
                               </span>
                             )}
                             placeholder={t("cikis:items_select")}
@@ -420,6 +357,38 @@ function CreateShipmentPage() {
                       )}
                       <FieldError>{form.formState.errors.items?.[idx]?.qty?.message}</FieldError>
                     </div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-[1fr_120px] gap-2 sm:grid-cols-[1fr_120px_40px]">
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground">
+                        {t("cikis:sender_charge")}
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        placeholder="0.00"
+                        {...form.register(`items.${idx}.senderChargeAmount`, {
+                          setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground">
+                        {t("cikis:currency")}
+                      </Label>
+                      <select
+                        {...form.register(`items.${idx}.senderChargeCurrency`)}
+                        className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                      >
+                        {CURRENCIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div />
                   </div>
                 </div>
               );

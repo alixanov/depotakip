@@ -11,6 +11,7 @@ export const recipientSchema = z.object({
 export const shipmentItemSchema = z.object({
   lotId: objectIdSchema,
   qty: z.coerce.number().int().positive(),
+  senderCharge: moneySchema.nullable().optional(),
 });
 
 export const createShipmentSchema = z.object({

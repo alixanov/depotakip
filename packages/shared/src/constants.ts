@@ -157,7 +157,13 @@ export const NOTIFICATION_TEMPLATE_KEYS = [
 ] as const;
 export type NotificationTemplateKey = (typeof NOTIFICATION_TEMPLATE_KEYS)[number];
 
-export const TRANSACTION_KINDS = ["carrier_charge", "carrier_payment", "adjustment"] as const;
+export const TRANSACTION_KINDS = [
+  "carrier_charge",
+  "carrier_payment",
+  "sender_charge",
+  "sender_payment",
+  "adjustment",
+] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 export const PAYMENT_METHODS = ["cash", "bank", "card", "other"] as const;

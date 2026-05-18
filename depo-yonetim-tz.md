@@ -2,7 +2,7 @@
 
 ## Система управления складом и грузоперевозками «Depo Yönetim Sistemi»
 
-**Версия документа:** 2.3 (категории удалены v2.2; sender_charge/sender_payment удалены v2.3 — отправители больше не финансовые контрагенты)
+**Версия документа:** 2.2 (стек React 19.2 + Express + MongoDB, Node.js 24.15 LTS; категории удалены)
 **Дата:** 2026-05-18
 **Язык интерфейса:** турецкий (TR), админ-панель допускает русские подсказки.
 **Маршрут бизнеса:** Узбекистан (склад) → Турция (доставка).
@@ -36,8 +36,8 @@
 | **Получатель (recipient, alıcı)**   | Конечный адресат груза в Турции.                                                  |
 | **Отправка (shipment, gönderi)**    | Передача одной или нескольких партий перевозчику.                                 |
 | **Статус**                          | `bekliyor` / `yolda` / `teslim` / `kayip` / `borclu` / `iptal`.                   |
-| **Платёж**                          | Денежная транзакция от перевозчика в адрес компании.                              |
-| **Долг**                            | Невыплаченный остаток по перевозчику в базовой валюте.                            |
+| **Платёж**                          | Денежная транзакция от перевозчика или отправителя в адрес компании.              |
+| **Долг**                            | Невыплаченный остаток по перевозчику или отправителю в базовой валюте.            |
 
 ---
 
@@ -318,9 +318,11 @@ depo-yonetim/
 ```js
 {
   _id, orgId,
-  kind: 'carrier_charge' | 'carrier_payment' | 'adjustment',
+  kind: 'carrier_charge' | 'carrier_payment'
+      | 'sender_charge'  | 'sender_payment'
+      | 'adjustment',
   counterparty: {
-    type: 'carrier',               // только перевозчики; отправители не контрагенты
+    type: 'carrier' | 'sender',
     id: ObjectId,
   },
   shipmentId: ObjectId → shipments | null,
@@ -478,7 +480,7 @@ db.transactions.aggregate([
 
 - CRUD: `/api/senders`, `/api/carriers`.
 - Поиск: query-параметр `?q=` (full-text по индексу).
-- На карточке: история (`GET /api/senders/:id/lots`, `GET /api/carriers/:id/shipments`), баланс перевозчика (`GET /api/carriers/:id/balance`), быстрый платёж перевозчику (`POST /api/transactions`). У отправителя финансовой стороны нет.
+- На карточке: история (`GET /api/senders/:id/lots`, `GET /api/carriers/:id/shipments`), баланс (`GET /api/senders/:id/balance`), быстрый платёж (`POST /api/transactions`).
 - Привязка Telegram: `GET /api/integrations/telegram/link?type=sender&id=...` возвращает deep-link `https://t.me/<bot>?start=<token>`. После `/start` бот сохраняет `telegramChatId` в коллекцию.
 
 ### 6.5. Приёмка на склад
@@ -505,7 +507,7 @@ db.transactions.aggregate([
     "recipient": { "name": "...", "phone": "...", "addressTr": "..." },
     "shipmentDate": "2026-05-17",
     "carrierFee": { "amount": 5000, "currency": "USD" },
-    "items": [{ "lotId": "...", "qty": 5 }],
+    "items": [{ "lotId": "...", "qty": 5, "senderCharge": { "amount": 2000, "currency": "USD" } }],
     "notes": ""
   }
   ```
@@ -514,7 +516,7 @@ db.transactions.aggregate([
   2. Декрементит `qtyAvailable`, пересчитывает `status` lot'а.
   3. Получает `shortCode` через `counters`.
   4. Создаёт `shipment` со статусом `bekliyor`.
-  5. Создаёт ровно один `carrier_charge` transaction на сумму `carrierFee`.
+  5. Создаёт `transactions`: один `carrier_charge` и по одному `sender_charge` на каждую позицию (если задана).
   6. Эмитит событие в socket.io room `org:{orgId}` (для realtime-обновления у других пользователей).
 - `PATCH /api/shipments/:id/status` — смена статуса с записью в `statusHistory`, при `iptal` — реверс через транзакцию.
 - `POST /api/shipments/:id/waybill-pdf` — накладная PDF.
@@ -527,8 +529,9 @@ db.transactions.aggregate([
 
 ### 6.9. Финансы
 
-- `GET /api/balances/carriers?currency=USD` — список балансов перевозчиков.
-- `GET /api/transactions?counterpartyId=&from=&to=&kind=`.
+- `GET /api/balances/carriers?currency=USD` — список балансов.
+- `GET /api/balances/senders?currency=USD`.
+- `GET /api/transactions?counterpartyType=carrier&counterpartyId=&from=&to=&kind=`.
 - `POST /api/transactions` — регистрация платежа или ручной adjustment.
 - `POST /api/transactions/:id/receipt-pdf` — расписка.
 
@@ -797,7 +800,7 @@ Pipeline:
 **Этап 5. Финансы (1.5 недели)**
 
 - `transactions`, мультивалютность, конвертация.
-- Балансы перевозчиков (aggregation).
+- Балансы перевозчиков и отправителей (aggregation).
 - UI: ленты транзакций, регистрация платежа, расписка PDF.
 - Финансовый отчёт.
 

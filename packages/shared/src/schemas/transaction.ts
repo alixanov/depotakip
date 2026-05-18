@@ -5,7 +5,7 @@ import { objectIdSchema } from "./common.js";
 export const createTransactionSchema = z.object({
   kind: z.enum(TRANSACTION_KINDS),
   counterparty: z.object({
-    type: z.literal("carrier"),
+    type: z.enum(["carrier", "sender"]),
     id: objectIdSchema,
   }),
   shipmentId: objectIdSchema.nullable().optional(),

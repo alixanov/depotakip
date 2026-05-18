@@ -3,6 +3,7 @@ import type { CreateTransactionInput, Currency, TransactionKind } from "@sadiyak
 import { badRequest, notFound } from "../../lib/errors.js";
 import { paginate, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "../carriers/carrier.model.js";
+import { Sender } from "../senders/sender.model.js";
 import { convertToUsd } from "../exchangeRates/exchangeRates.service.js";
 import { enqueue as enqueueNotification } from "../notifications/notifications.service.js";
 import { Transaction } from "./transaction.model.js";
@@ -10,6 +11,7 @@ import { Transaction } from "./transaction.model.js";
 interface ListQuery {
   page?: number;
   limit?: number;
+  counterpartyType?: "carrier" | "sender";
   counterpartyId?: string;
   shipmentId?: string;
   kind?: TransactionKind;
@@ -19,9 +21,9 @@ interface ListQuery {
 }
 
 export async function list(orgId: string, query: ListQuery) {
-  // All transactions are carrier-scoped now (sender financials removed in
-  // v2.3) so we no longer filter by counterpartyType.
-  const filter = tenantFilter(orgId, { "counterparty.type": "carrier" });
+  const filter = tenantFilter(orgId);
+  if (query.counterpartyType)
+    Object.assign(filter, { "counterparty.type": query.counterpartyType });
   if (query.counterpartyId)
     Object.assign(filter, { "counterparty.id": new Types.ObjectId(query.counterpartyId) });
   if (query.shipmentId) Object.assign(filter, { shipmentId: new Types.ObjectId(query.shipmentId) });
@@ -49,7 +51,7 @@ export async function createTx(
   orgId: string,
   args: {
     kind: TransactionKind;
-    counterparty: { type: "carrier"; id: string };
+    counterparty: { type: "carrier" | "sender"; id: string };
     shipmentId?: string | null;
     amount: number;
     currency: Currency;
@@ -93,14 +95,22 @@ export async function createTx(
 }
 
 /**
- * Public payment endpoint — operator/admin registers a carrier payment.
- * Kind must be `carrier_payment` (credit) or `adjustment`.
+ * Public payment endpoint — operator/admin registers a payment from a
+ * counterparty. Kind must be `*_payment` (credit) or `adjustment`.
  */
 export async function registerPayment(orgId: string, input: CreateTransactionInput) {
-  const carrier = await Carrier.findOne(
-    tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
-  );
-  if (!carrier) throw badRequest("Karşı taraf bulunamadı");
+  // Verify the counterparty exists in this org.
+  if (input.counterparty.type === "carrier") {
+    const c = await Carrier.findOne(
+      tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
+    );
+    if (!c) throw badRequest("Karşı taraf bulunamadı");
+  } else {
+    const s = await Sender.findOne(
+      tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
+    );
+    if (!s) throw badRequest("Karşı taraf bulunamadı");
+  }
 
   const doc = await createTx(orgId, {
     kind: input.kind,
@@ -114,21 +124,27 @@ export async function registerPayment(orgId: string, input: CreateTransactionInp
     notes: input.notes,
   });
 
-  // Notify the carrier when they paid us.
-  if (input.kind === "carrier_payment" && carrier.telegramChatId) {
-    await enqueueNotification({
-      orgId,
-      templateKey: "payment_received",
-      recipient: {
-        type: "carrier",
-        id: input.counterparty.id,
-        chatId: carrier.telegramChatId,
-      },
-      vars: {
-        amount: (input.amount / 100).toFixed(2),
-        currency: input.currency,
-      },
-    });
+  // Trigger payment_received notification when the counterparty paid us.
+  if (input.kind === "carrier_payment" || input.kind === "sender_payment") {
+    const chatId =
+      input.counterparty.type === "carrier"
+        ? (await Carrier.findById(input.counterparty.id))?.telegramChatId
+        : (await Sender.findById(input.counterparty.id))?.telegramChatId;
+    if (chatId) {
+      await enqueueNotification({
+        orgId,
+        templateKey: "payment_received",
+        recipient: {
+          type: input.counterparty.type,
+          id: input.counterparty.id,
+          chatId,
+        },
+        vars: {
+          amount: (input.amount / 100).toFixed(2),
+          currency: input.currency,
+        },
+      });
+    }
   }
 
   return doc.toClient();
@@ -142,14 +158,18 @@ interface BalanceRow {
   balanceUsd: number;
 }
 
-export async function carrierBalances(orgId: string): Promise<BalanceRow[]> {
+async function balanceAggregation(
+  orgId: string,
+  type: "carrier" | "sender"
+): Promise<BalanceRow[]> {
+  const lookupCollection = type === "carrier" ? "carriers" : "senders";
   const rows = await Transaction.aggregate<{
     _id: Types.ObjectId;
     debitUsd: number;
     creditUsd: number;
     name?: string;
   }>([
-    { $match: { ...tenantFilter(orgId), "counterparty.type": "carrier" } },
+    { $match: { ...tenantFilter(orgId), "counterparty.type": type } },
     {
       $group: {
         _id: "$counterparty.id",
@@ -163,7 +183,7 @@ export async function carrierBalances(orgId: string): Promise<BalanceRow[]> {
     },
     {
       $lookup: {
-        from: "carriers",
+        from: lookupCollection,
         localField: "_id",
         foreignField: "_id",
         as: "party",
@@ -174,13 +194,16 @@ export async function carrierBalances(orgId: string): Promise<BalanceRow[]> {
         _id: 1,
         debitUsd: 1,
         creditUsd: 1,
-        name: {
-          $concat: [
-            { $ifNull: [{ $arrayElemAt: ["$party.firstName", 0] }, ""] },
-            " ",
-            { $ifNull: [{ $arrayElemAt: ["$party.lastName", 0] }, ""] },
-          ],
-        },
+        name:
+          type === "carrier"
+            ? {
+                $concat: [
+                  { $ifNull: [{ $arrayElemAt: ["$party.firstName", 0] }, ""] },
+                  " ",
+                  { $ifNull: [{ $arrayElemAt: ["$party.lastName", 0] }, ""] },
+                ],
+              }
+            : { $arrayElemAt: ["$party.fullName", 0] },
       },
     },
   ]);
@@ -193,3 +216,6 @@ export async function carrierBalances(orgId: string): Promise<BalanceRow[]> {
     balanceUsd: r.debitUsd - r.creditUsd,
   }));
 }
+
+export const carrierBalances = (orgId: string) => balanceAggregation(orgId, "carrier");
+export const senderBalances = (orgId: string) => balanceAggregation(orgId, "sender");

@@ -10,6 +10,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/balances/carriers", controller.carrierBalances);
+router.get("/balances/senders", controller.senderBalances);
 
 router.get("/", controller.list);
 router.get("/:id/receipt.pdf", validate({ params: idParamSchema }), paymentReceiptPdf);
