@@ -15,6 +15,15 @@ export const moneySchema = z.object({
   currency: z.enum(CURRENCIES),
 });
 
+/** Money с amount >= 1. Используется для charges/fees, где 0 не имеет
+ *  бизнес-смысла (бесплатной отгрузки или нулевой комиссии перевозчика не
+ *  бывает) и приводит к Mongoose-ValidationError на Transaction.amount.
+ *  Для adjustment/balance allowance оставить обычный moneySchema. */
+export const positiveMoneySchema = z.object({
+  amount: z.number().int().positive("validation:amount_positive"),
+  currency: z.enum(CURRENCIES),
+});
+
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
