@@ -200,7 +200,7 @@ export async function carriers(orgId: string, range: DateRange = {}): Promise<Ca
     _id: { $in: Array.from(carrierIds).map((id) => new Types.ObjectId(id)) },
   });
   const nameById = new Map(
-    carriersList.map((c) => [c._id.toString(), `${c.firstName} ${c.lastName}`])
+    carriersList.map((c) => [c._id.toString(), `${c.firstName} ${c.lastName}`.trim()])
   );
 
   return Array.from(carrierIds)

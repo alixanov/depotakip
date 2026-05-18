@@ -115,7 +115,10 @@ export function SenderFormDialog({ open, onOpenChange, sender, onSaved }: Sender
             <FieldError>{form.formState.errors.fullName?.message}</FieldError>
           </div>
           <div className="space-y-1.5">
-            <Label>{t("admin:col_phone")}</Label>
+            <Label>
+              {t("admin:col_phone")}{" "}
+              <span className="text-xs font-normal text-muted-foreground">({t("optional")})</span>
+            </Label>
             <Input {...form.register("phone")} placeholder="+998..." autoComplete="tel" />
             <FieldError>{form.formState.errors.phone?.message}</FieldError>
           </div>

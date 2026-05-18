@@ -187,12 +187,12 @@ function CreateShipmentPage() {
                       value={field.value || ""}
                       onChange={field.onChange}
                       getValue={(c) => c.id}
-                      getLabel={(c) => `${c.firstName} ${c.lastName}`}
+                      getLabel={(c) => `${c.firstName} ${c.lastName}`.trim()}
                       getSearchKeys={(c) => [c.phone]}
                       renderOption={(c) => (
                         <div className="flex min-w-0 items-baseline justify-between gap-2">
                           <span className="truncate font-medium">
-                            {c.firstName} {c.lastName}
+                            {`${c.firstName} ${c.lastName}`.trim()}
                           </span>
                           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                             {c.phone}

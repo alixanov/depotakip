@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { phoneSchema, telegramUsernameSchema } from "./common.js";
+import { optionalPhoneSchema, telegramUsernameSchema } from "./common.js";
 
 export const createCarrierSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
-  lastName: z.string().trim().min(1).max(80),
-  phone: phoneSchema,
+  // lastName опциональна: некоторые перевозчики представлены только по
+  // имени (или прозвищу). Пустая строка → "" в БД, отображение собирает
+  // "firstName lastName" с trim, так что пустое поле просто не покажется.
+  lastName: z.string().trim().max(80).default(""),
+  phone: optionalPhoneSchema,
   telegramChatId: z.number().int().nullable().optional(),
   telegramUsername: telegramUsernameSchema,
   deliveryAddressTr: z.string().trim().max(500).default(""),

@@ -60,7 +60,7 @@ export async function search(orgId: string, q: string, limit = 8): Promise<Searc
     hits.push({
       type: "carrier",
       id: c._id.toString(),
-      title: `${c.firstName} ${c.lastName}`,
+      title: `${c.firstName} ${c.lastName}`.trim(),
       subtitle: c.phone,
     });
   }

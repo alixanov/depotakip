@@ -37,11 +37,12 @@ export async function get(orgId: string, id: string) {
 }
 
 export async function create(orgId: string, input: CreateCarrierInput) {
-  // Защита от случайных дубликатов: индекс не unique, поэтому проверяем
-  // на уровне сервиса. Если phone уже занят активным перевозчиком в этой
-  // орг — отказ. Soft-deleted перевозчики не блокируют (можно «вернуть»).
-  const existing = await Carrier.findOne(tenantFilter(orgId, { phone: input.phone }));
-  if (existing) throw conflict("err:phone_taken_carrier");
+  // Дубликаты phone в одной орг (индекс не unique). Пустой phone
+  // не считается дубликатом — поле теперь опционально.
+  if (input.phone) {
+    const existing = await Carrier.findOne(tenantFilter(orgId, { phone: input.phone }));
+    if (existing) throw conflict("err:phone_taken_carrier");
+  }
   const doc = await Carrier.create({ orgId: new Types.ObjectId(orgId), ...input });
   return doc.toClient();
 }
@@ -128,7 +129,9 @@ export async function bulkImport(
       continue;
     }
     const { phone } = parsed.data;
-    if (seenInBatch.has(phone)) {
+    // phone опционален: пустой не дедуплицируется (один файл может
+    // содержать сколько угодно записей без телефона).
+    if (phone && seenInBatch.has(phone)) {
       report.failed.push({
         row,
         reason: `Дубликат phone в файле (${phone})`,
@@ -137,9 +140,9 @@ export async function bulkImport(
       });
       continue;
     }
-    seenInBatch.add(phone);
+    if (phone) seenInBatch.add(phone);
 
-    const existingId = existingByPhone.get(phone);
+    const existingId = phone ? existingByPhone.get(phone) : undefined;
     if (existingId) {
       if (options.onDuplicate === "skip") {
         report.skippedDuplicates += 1;

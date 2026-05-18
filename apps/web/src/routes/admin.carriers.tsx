@@ -49,18 +49,14 @@ function CarriersPage() {
     {
       key: "name",
       header: t("admin:col_name"),
-      cell: (c) => (
-        <span className="font-medium">
-          {c.firstName} {c.lastName}
-        </span>
-      ),
+      cell: (c) => <span className="font-medium">{`${c.firstName} ${c.lastName}`.trim()}</span>,
     },
     {
       key: "phone",
       header: t("admin:col_phone"),
       cell: (c) => (
         <div className="leading-tight">
-          <div className="tabular-nums">{c.phone}</div>
+          <div className={c.phone ? "tabular-nums" : "text-muted-foreground"}>{c.phone || "—"}</div>
           {c.telegramUsername && (
             <a
               href={`https://t.me/${c.telegramUsername}`}
@@ -142,9 +138,11 @@ function CarriersPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">
-                    {c.firstName} {c.lastName}
+                    {`${c.firstName} ${c.lastName}`.trim()}
                   </p>
-                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  {c.phone && (
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  )}
                   {c.telegramUsername && (
                     <a
                       href={`https://t.me/${c.telegramUsername}`}

@@ -31,8 +31,10 @@ const carrierSchema = new Schema<CarrierDoc>(
   {
     orgId: { type: Schema.Types.ObjectId, required: true, index: true },
     firstName: { type: String, required: true, trim: true },
-    lastName: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    // lastName и phone опциональны — некоторые перевозчики ходят только
+    // по имени/прозвищу или связь через Telegram без номера.
+    lastName: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true },
     telegramChatId: { type: Number, default: null },
     telegramUsername: { type: String, default: null, trim: true },
     deliveryAddressTr: { type: String, default: "", trim: true },

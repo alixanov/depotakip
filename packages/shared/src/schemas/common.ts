@@ -40,6 +40,21 @@ export const phoneSchema = z
   .trim()
   .regex(/^\+?[\d\s\-()]{5,40}$/, "validation:invalid_phone");
 
+/** Optional phone: пустая строка/whitespace → undefined, иначе тот же regex.
+ *  Используется в sender/carrier — телефон стал опциональным (старые
+ *  записи могут иметь "" в БД, фронт-формы могут отправлять пустое поле). */
+export const optionalPhoneSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== "string") return v;
+    const stripped = v.trim();
+    return stripped === "" ? undefined : stripped;
+  },
+  z
+    .string()
+    .regex(/^\+?[\d\s\-()]{5,40}$/, "validation:invalid_phone")
+    .optional()
+);
+
 /**
  * Telegram username. Accepts both `username` and `@username`; strips the
  * leading `@` and validates against the Telegram spec (5–32 chars, starts

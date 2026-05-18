@@ -34,12 +34,14 @@ export function useApiFormErrors<T extends FieldValues>(form: UseFormReturn<T>) 
       );
     });
 
-    // Всегда возвращаем top-level message: setError на несуществующее
-    // поле (например mongoose-ValidationError даёт `fields.amount`, тогда
-    // как в форме реально есть `carrierFee.amount`) тихо теряется — без
-    // банера юзер не понимает, что вообще произошло. FormError ставим
-    // ВСЕГДА, fields дублируются на полях если path совпал.
-    return localizedMessage(err, t);
+    // Если хотя бы одну ошибку удалось привязать к полю формы —
+    // оставляем top-level banner пустым (FieldError под нужным
+    // <Input/> уже достаточен; иначе одно и то же сообщение
+    // дублируется и в banner'е, и под полем). Если ни одна не
+    // замапилась (пустой fields, общая 500/network, mongoose path
+    // не совпал с формой) — показываем общий message, чтобы
+    // пользователь видел хоть какой-то сигнал.
+    return names.length > 0 ? "" : localizedMessage(err, t);
   };
 }
 

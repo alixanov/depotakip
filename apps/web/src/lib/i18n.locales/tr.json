@@ -25,6 +25,7 @@
     "all": "Tümü",
     "select": "— Seçin —",
     "unit_pcs": "adet",
+    "optional": "opsiyonel",
     "notFound": "Bulunamadı",
     "error": "Bir hata oluştu",
     "actions": "İşlem",

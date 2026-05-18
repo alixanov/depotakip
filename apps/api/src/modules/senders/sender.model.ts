@@ -31,7 +31,10 @@ const senderSchema = new Schema<SenderDoc>(
   {
     orgId: { type: Schema.Types.ObjectId, required: true, index: true },
     fullName: { type: String, required: true, trim: true },
-    phone: { type: String, required: true, trim: true },
+    // phone опционален: пустая строка по умолчанию (см. shared
+    // optionalPhoneSchema — нормализует "" / whitespace → undefined,
+    // Mongoose сохраняет default "").
+    phone: { type: String, default: "", trim: true },
     telegramChatId: { type: Number, default: null },
     telegramUsername: { type: String, default: null, trim: true },
     address: { type: String, default: "", trim: true },

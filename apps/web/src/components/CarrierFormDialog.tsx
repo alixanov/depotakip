@@ -103,7 +103,7 @@ export function CarrierFormDialog({
           <ResponsiveDialogTitle>
             {isEdit
               ? t("admin:btn_edit_carrier", {
-                  name: `${carrier!.firstName} ${carrier!.lastName}`,
+                  name: `${carrier!.firstName} ${carrier!.lastName}`.trim(),
                 })
               : t("admin:btn_new_carrier")}
           </ResponsiveDialogTitle>
@@ -123,13 +123,19 @@ export function CarrierFormDialog({
               <FieldError>{form.formState.errors.firstName?.message}</FieldError>
             </div>
             <div className="space-y-1.5">
-              <Label>{t("admin:col_last_name")}</Label>
+              <Label>
+                {t("admin:col_last_name")}{" "}
+                <span className="text-xs font-normal text-muted-foreground">({t("optional")})</span>
+              </Label>
               <Input {...form.register("lastName")} autoComplete="family-name" />
               <FieldError>{form.formState.errors.lastName?.message}</FieldError>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>{t("admin:col_phone")}</Label>
+            <Label>
+              {t("admin:col_phone")}{" "}
+              <span className="text-xs font-normal text-muted-foreground">({t("optional")})</span>
+            </Label>
             <Input {...form.register("phone")} placeholder="+90..." autoComplete="tel" />
             <FieldError>{form.formState.errors.phone?.message}</FieldError>
           </div>

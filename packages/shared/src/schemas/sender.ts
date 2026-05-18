@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { phoneSchema, telegramUsernameSchema } from "./common.js";
+import { optionalPhoneSchema, telegramUsernameSchema } from "./common.js";
 
 export const createSenderSchema = z.object({
   fullName: z.string().trim().min(1).max(120),
-  phone: phoneSchema,
+  phone: optionalPhoneSchema,
   telegramChatId: z.number().int().nullable().optional(),
   telegramUsername: telegramUsernameSchema,
   address: z.string().trim().max(500).default(""),

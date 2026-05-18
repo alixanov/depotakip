@@ -50,7 +50,7 @@ export const waybillPdf = async (req: Request<IdParams>, res: Response): Promise
       carrierFee: shipment.carrierFee,
     },
     carrier: {
-      fullName: carrier ? `${carrier.firstName} ${carrier.lastName}` : "—",
+      fullName: carrier ? `${carrier.firstName} ${carrier.lastName}`.trim() : "—",
       phone: carrier?.phone || "—",
     },
     recipient: shipment.recipient,

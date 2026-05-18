@@ -83,6 +83,8 @@ export interface Role {
 export interface Sender {
   id: string;
   fullName: string;
+  /** Опциональный — оператор может ввести только имя. В БД пустая строка
+   *  означает «не указан»; в client-JSON `toClient()` пробрасывает как есть. */
   phone: string;
   telegramChatId: number | null;
   /** Public Telegram handle (no leading `@`). Display + click-to-open only;
@@ -99,7 +101,9 @@ export interface Sender {
 export interface Carrier {
   id: string;
   firstName: string;
+  /** Опциональна; в БД пустая строка. UI собирает `firstName lastName` с trim. */
   lastName: string;
+  /** Опциональный — см. Sender.phone. */
   phone: string;
   telegramChatId: number | null;
   /** See {@link Sender.telegramUsername} — same display-only semantics. */

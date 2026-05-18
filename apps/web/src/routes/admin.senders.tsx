@@ -57,7 +57,7 @@ function SendersPage() {
       header: t("admin:col_phone"),
       cell: (s) => (
         <div className="leading-tight">
-          <div className="tabular-nums">{s.phone}</div>
+          <div className={s.phone ? "tabular-nums" : "text-muted-foreground"}>{s.phone || "—"}</div>
           {s.telegramUsername && (
             <a
               href={`https://t.me/${s.telegramUsername}`}
@@ -155,7 +155,9 @@ function SendersPage() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{s.phone}</p>
+                  {s.phone && (
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{s.phone}</p>
+                  )}
                   {s.telegramUsername && (
                     <a
                       href={`https://t.me/${s.telegramUsername}`}

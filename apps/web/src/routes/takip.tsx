@@ -141,7 +141,7 @@ function TakipPage() {
   });
   const carrierName = (id: string): string => {
     const c = carriersQuery.data?.data.find((x) => x.id === id);
-    return c ? `${c.firstName} ${c.lastName}` : "—";
+    return c ? `${c.firstName} ${c.lastName}`.trim() : "—";
   };
 
   const columns: Column<Shipment>[] = [

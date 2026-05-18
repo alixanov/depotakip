@@ -36,10 +36,13 @@ export async function get(orgId: string, id: string) {
 }
 
 export async function create(orgId: string, input: CreateSenderInput) {
-  // Защита от случайных дубликатов в одной орг — индекс не unique
-  // (исторически могли существовать дубликаты), валидация на уровне service.
-  const existing = await Sender.findOne(tenantFilter(orgId, { phone: input.phone }));
-  if (existing) throw conflict("err:phone_taken_sender");
+  // Защита от случайных дубликатов phone в одной орг — индекс не unique.
+  // phone теперь опциональный: пустой не считается дубликатом (иначе
+  // нельзя было бы создать второго sender'а без номера).
+  if (input.phone) {
+    const existing = await Sender.findOne(tenantFilter(orgId, { phone: input.phone }));
+    if (existing) throw conflict("err:phone_taken_sender");
+  }
   const doc = await Sender.create({ orgId: new Types.ObjectId(orgId), ...input });
   return doc.toClient();
 }
@@ -129,7 +132,9 @@ export async function bulkImport(
       continue;
     }
     const { phone } = parsed.data;
-    if (seenInBatch.has(phone)) {
+    // phone опционален: пустой не дедуплицируется (один файл может
+    // содержать сколько угодно записей без телефона).
+    if (phone && seenInBatch.has(phone)) {
       report.failed.push({
         row,
         reason: `Дубликат phone в файле (${phone})`,
@@ -138,9 +143,9 @@ export async function bulkImport(
       });
       continue;
     }
-    seenInBatch.add(phone);
+    if (phone) seenInBatch.add(phone);
 
-    const existingId = existingByPhone.get(phone);
+    const existingId = phone ? existingByPhone.get(phone) : undefined;
     if (existingId) {
       if (options.onDuplicate === "skip") {
         report.skippedDuplicates += 1;

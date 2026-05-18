@@ -171,7 +171,7 @@ export function ShipmentDetailSheet({
                 label={t("cikis:carrier")}
                 value={
                   carrier
-                    ? `${carrier.firstName} ${carrier.lastName}`
+                    ? `${carrier.firstName} ${carrier.lastName}`.trim()
                     : detail.data.carrierId.slice(-6)
                 }
                 sub={carrier?.phone}
