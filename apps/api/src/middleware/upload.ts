@@ -3,8 +3,8 @@ import { env } from "../config/env.js";
 
 // First-pass guard: rejects obviously non-image declared MIME types early so
 // we don't buffer multi-megabyte uploads we'll throw away. Magic-byte
-// verification still runs server-side in the service (TZ §9 — never trust
-// the content-type header).
+// verification still runs server-side in the service — never trust the
+// client-supplied Content-Type header.
 function imageOnly(
   _req: Express.Request,
   file: Express.Multer.File,

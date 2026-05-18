@@ -652,7 +652,7 @@ function ReceiveTab() {
         toast.success(t("depo:toast_created"), {
           description: t("depo:toast_created_desc", { code: lot.id.slice(-6) }),
         });
-        // Two-step photo upload (TZ §6.5 — POST /lots/:id/photos). On failure
+        // Two-step photo upload (POST /lots/:id/photos after the lot exists). On failure
         // the lot is already in the DB; surface a separate toast so the user
         // can re-attempt via the gallery later.
         if (stagedPhotos.length > 0) {

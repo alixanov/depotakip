@@ -16,9 +16,9 @@ import { Sender } from "../senders/sender.model.js";
 import { Shipment } from "../shipments/shipment.model.js";
 import { InboundLot } from "./lot.model.js";
 
-// Photo magic-byte allow-list. TZ §9: never trust the Content-Type header —
-// check the actual file signature. Sharp converts everything to JPEG, so
-// the final mimeType stored in Mongo is always image/jpeg.
+// Photo magic-byte allow-list. Never trust the client-supplied Content-Type —
+// check the actual file signature. Sharp converts everything to JPEG, so the
+// final mimeType stored in Mongo is always image/jpeg.
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const RESIZE_MAX = 1600;
 const JPEG_QUALITY = 80;
@@ -153,8 +153,8 @@ export async function remove(orgId: string, id: string) {
 // Photos
 //
 // All photos pass through sharp (auto-rotate by EXIF → resize to fit 1600 →
-// JPEG q=80) before reaching S3. Originals are NOT stored — TZ §15 keeps the
-// bucket small and the schema only tracks the compressed asset.
+// JPEG q=80) before reaching S3. Originals are NOT stored — the schema only
+// tracks the compressed asset, which keeps the bucket small.
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function addPhotos(orgId: string, lotId: string, files: Express.Multer.File[]) {
