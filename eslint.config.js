@@ -63,6 +63,19 @@ export default [
     },
   },
 
+  // One-off Node scripts under scripts/ (seed-demo, clean-demo, etc).
+  {
+    files: ["scripts/**/*.{mjs,js,ts}"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+    rules: {
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
+  },
+
   // Frontend TS + React 19 + React Compiler
   ...tseslint.config({
     files: ["apps/web/**/*.{ts,tsx}"],

@@ -36,3 +36,7 @@ pnpm-debug.log*
 
 # os
 .DS_Store
+
+# transient audit/diag artifacts
+audit-*.png
+.playwright-mcp/
