@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type Carrier } from "@sadiyakargo/shared";
-import { Plus, Trash2, Truck } from "lucide-react";
+import { Pencil, Plus, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,7 @@ function CarriersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Carrier | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { t } = useTranslation();
 
@@ -52,7 +53,26 @@ function CarriersPage() {
         </span>
       ),
     },
-    { key: "phone", header: t("admin:col_phone"), cell: (c) => c.phone },
+    {
+      key: "phone",
+      header: t("admin:col_phone"),
+      cell: (c) => (
+        <div className="leading-tight">
+          <div className="tabular-nums">{c.phone}</div>
+          {c.telegramUsername && (
+            <a
+              href={`https://t.me/${c.telegramUsername}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-primary hover:underline"
+            >
+              @{c.telegramUsername}
+            </a>
+          )}
+        </div>
+      ),
+    },
     {
       key: "addr",
       header: t("admin:col_addressTr"),
@@ -61,18 +81,24 @@ function CarriersPage() {
     {
       key: "actions",
       header: "",
-      cell: (c) =>
-        canDelete ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setConfirmId(c.id)}
-            aria-label={t("delete")}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
+      cell: (c) => (
+        <div className="flex justify-end gap-0.5">
+          <Button variant="ghost" size="icon" onClick={() => setEditing(c)} aria-label={t("edit")}>
+            <Pencil className="h-4 w-4" />
           </Button>
-        ) : null,
-      width: "60px",
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setConfirmId(c.id)}
+              aria-label={t("delete")}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+        </div>
+      ),
+      width: "96px",
       className: "text-right",
     },
   ];
@@ -113,22 +139,43 @@ function CarriersPage() {
                     {c.firstName} {c.lastName}
                   </p>
                   <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  {c.telegramUsername && (
+                    <a
+                      href={`https://t.me/${c.telegramUsername}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 inline-block text-xs text-primary hover:underline"
+                    >
+                      @{c.telegramUsername}
+                    </a>
+                  )}
                   {c.deliveryAddressTr && (
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {c.deliveryAddressTr}
                     </p>
                   )}
                 </div>
-                {canDelete && (
+                <div className="flex shrink-0 items-start gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setConfirmId(c.id)}
-                    aria-label={t("delete")}
+                    onClick={() => setEditing(c)}
+                    aria-label={t("edit")}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Pencil className="h-4 w-4" />
                   </Button>
-                )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setConfirmId(c.id)}
+                      aria-label={t("delete")}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             empty={
@@ -148,7 +195,16 @@ function CarriersPage() {
         </CardContent>
       </Card>
 
-      <CarrierFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CarrierFormDialog
+        open={dialogOpen || !!editing}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialogOpen(false);
+            setEditing(null);
+          }
+        }}
+        carrier={editing ?? undefined}
+      />
 
       <ConfirmDialog
         open={!!confirmId}

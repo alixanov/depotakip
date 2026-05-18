@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { phoneSchema } from "./common.js";
+import { phoneSchema, telegramUsernameSchema } from "./common.js";
 
 export const createCarrierSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
   phone: phoneSchema,
   telegramChatId: z.number().int().nullable().optional(),
+  telegramUsername: telegramUsernameSchema,
   deliveryAddressTr: z.string().trim().max(500).default(""),
   notes: z.string().trim().max(1000).default(""),
 });

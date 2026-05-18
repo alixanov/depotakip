@@ -540,7 +540,7 @@ function CreateShipmentPage() {
       <CarrierFormDialog
         open={carrierDialogOpen}
         onOpenChange={setCarrierDialogOpen}
-        onCreated={(carrier) => {
+        onSaved={(carrier) => {
           // Auto-select the freshly-created carrier + invalidate the cache so
           // subsequent opens of the Combobox see the new entry.
           form.setValue("carrierId", carrier.id, { shouldValidate: true });

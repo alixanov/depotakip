@@ -858,7 +858,7 @@ function ReceiveTab() {
       <SenderFormDialog
         open={senderDialogOpen}
         onOpenChange={setSenderDialogOpen}
-        onCreated={(sender) => {
+        onSaved={(sender) => {
           // Auto-select the freshly created sender + invalidate the cached
           // list so the Combobox sees the new entry on its next open.
           form.setValue("senderId", sender.id, { shouldValidate: true });

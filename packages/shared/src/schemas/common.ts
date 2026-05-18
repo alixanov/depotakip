@@ -30,3 +30,29 @@ export const phoneSchema = z
   .string()
   .trim()
   .regex(/^\+?[\d\s\-()]{5,40}$/, "Geçersiz telefon");
+
+/**
+ * Telegram username. Accepts both `username` and `@username`; strips the
+ * leading `@` and validates against the Telegram spec (5–32 chars, starts
+ * with a letter, alphanum + underscore). Empty string is coerced to null so
+ * a form input that the operator cleared serialises cleanly.
+ *
+ * NOTE: this is a display/lookup value only — the Telegram Bot API cannot
+ * send messages to a private user by `@username`, only by numeric chatId.
+ * Keep `telegramChatId` alongside for actual outbound delivery.
+ */
+export const telegramUsernameSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== "string") return v;
+    const stripped = v.trim().replace(/^@+/, "");
+    return stripped === "" ? null : stripped;
+  },
+  z
+    .string()
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/,
+      "5–32 karakter, harfle başlar, sadece harf/rakam/alt çizgi"
+    )
+    .nullable()
+    .optional()
+);

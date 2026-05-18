@@ -85,6 +85,10 @@ export interface Sender {
   fullName: string;
   phone: string;
   telegramChatId: number | null;
+  /** Public Telegram handle (no leading `@`). Display + click-to-open only;
+   *  the Bot API cannot DM private users by username, so notifications still
+   *  require {@link telegramChatId}. */
+  telegramUsername: string | null;
   address: string;
   notes: string;
   isSelf: boolean;
@@ -98,6 +102,8 @@ export interface Carrier {
   lastName: string;
   phone: string;
   telegramChatId: number | null;
+  /** See {@link Sender.telegramUsername} — same display-only semantics. */
+  telegramUsername: string | null;
   deliveryAddressTr: string;
   notes: string;
   createdAt: string;
