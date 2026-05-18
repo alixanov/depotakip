@@ -28,6 +28,9 @@ export async function create(input: CreateExchangeRateInput) {
       rateDate: new Date(input.rateDate),
       source: "manual",
     });
+    // Сбрасываем кэш для этой пары currency+дата: если админ обновил
+    // курс на сегодня, следующая transaction должна взять новое значение.
+    invalidateRateCache(input.currency, new Date(input.rateDate));
     return doc.toClient();
   } catch (err: unknown) {
     if (
@@ -45,11 +48,29 @@ export async function create(input: CreateExchangeRateInput) {
 export async function remove(id: string) {
   const doc = await ExchangeRate.findByIdAndDelete(id);
   if (!doc) throw notFound("Kur kaydı bulunamadı");
+  // Удалённый курс мог быть последним валидным для своей даты;
+  // дроп всего кэша дешевле, чем выяснять какие ключи затронуты.
+  CACHE.clear();
 }
 
 /** Convert an amount from any supported currency to USD, using the closest
- *  exchange rate on or before `date`. USD is treated as 1:1. */
+ *  exchange rate on or before `date`. USD is treated as 1:1.
+ *
+ *  Process-local cache; инвалидируется через `invalidateRateCache(currency, date)`
+ *  при админ-правках. Ключ строится из той же `YYYY-MM-DD`-нормализации, что
+ *  и lookup, чтобы инвалидация попадала ровно в нужную запись.
+ */
 const CACHE = new Map<string, number>();
+
+function cacheKey(currency: Currency, date: Date): string {
+  return `${currency}:${date.toISOString().slice(0, 10)}`;
+}
+
+/** Сбросить запись по конкретной валюте + дате. Используется при POST/PATCH
+ *  курса — иначе следующая transaction до рестарта считала бы по старому. */
+export function invalidateRateCache(currency: Currency, date: Date): void {
+  CACHE.delete(cacheKey(currency, date));
+}
 
 export async function convertToUsd(
   amount: number,
@@ -58,7 +79,7 @@ export async function convertToUsd(
 ): Promise<{ amountUsd: number; rate: number }> {
   if (currency === "USD") return { amountUsd: amount, rate: 1 };
 
-  const key = `${currency}:${date.toISOString().slice(0, 10)}`;
+  const key = cacheKey(currency, date);
   if (CACHE.has(key)) {
     const rate = CACHE.get(key)!;
     return { amountUsd: Math.round(amount * rate), rate };

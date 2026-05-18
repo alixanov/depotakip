@@ -47,9 +47,13 @@ export function NumberInput({
     if (typeof max === "number") n = Math.min(max, n);
     return n;
   };
+  const isIntegerStep = Number.isInteger(step);
   const change = (delta: number) => {
     const base = typeof value === "number" && !Number.isNaN(value) ? value : 0;
-    onChange?.(clamp(Math.round((base + delta) * 1e6) / 1e6));
+    // Для целых step не округляем через 1e6 (избегаем edge-case "$100.0001
+    // → $100.00"). Для дробных оставляем precision-fix против плавучки.
+    const next = isIntegerStep ? base + delta : Math.round((base + delta) * 1e6) / 1e6;
+    onChange?.(clamp(next));
   };
 
   return (

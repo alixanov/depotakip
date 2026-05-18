@@ -107,9 +107,15 @@ export async function enqueue(input: EnqueueInput): Promise<string | null> {
 
 /** Worker handler: load log, dispatch via adapter, mark sent/failed. */
 export async function processOne(logId: string): Promise<void> {
-  const log = await NotificationLog.findById(logId);
+  // Атомарный инкремент: если сам log.save() в конце упадёт (Mongo blip,
+  // version conflict), attempts всё равно зафиксирован, и BullMQ-retry не
+  // отправит сообщение второй раз сверх лимита.
+  const log = await NotificationLog.findOneAndUpdate(
+    { _id: logId },
+    { $inc: { attempts: 1 } },
+    { new: true }
+  );
   if (!log) return;
-  log.attempts += 1;
   try {
     if (log.channel === "telegram" && log.recipientRef.chatId) {
       const res = await sendTelegram({
@@ -132,11 +138,21 @@ export async function processOne(logId: string): Promise<void> {
       const queue = getQueue();
       if (queue) {
         const delay = BACKOFF_SEC[Math.min(log.attempts, BACKOFF_SEC.length - 1)] * 1000;
-        await queue.add("send", { logId }, { delay, attempts: 1 });
+        try {
+          await queue.add("send", { logId }, { delay, attempts: 1 });
+        } catch (enqErr) {
+          logger.error({ err: enqErr, logId }, "notification_reenqueue_failed");
+        }
       }
     }
   }
-  await log.save();
+  try {
+    await log.save();
+  } catch (saveErr) {
+    // attempts уже инкрементирован выше через атомарный $inc, остальные поля
+    // (status/sentAt/error) описывают одну попытку — потеря допустима.
+    logger.error({ err: saveErr, logId, status: log.status }, "notification_log_save_failed");
+  }
 }
 
 /** Tests/operators may want to force-process the in-memory queue. */

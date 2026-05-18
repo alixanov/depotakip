@@ -12,7 +12,7 @@ const STORAGE_KEY = "sadiyakargo_lang";
 const fallback: AppLocale = "tr";
 
 function readInitialLanguage(): AppLocale {
-  if (typeof localStorage === "undefined") return fallback;
+  // Vite SPA, без SSR — localStorage всегда доступен.
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === "ru" || saved === "uz" || saved === "tr") return saved;
   return fallback;
@@ -30,7 +30,7 @@ void i18n.use(initReactI18next).init({
 
 export function setLanguage(code: AppLocale): void {
   void i18n.changeLanguage(code);
-  if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, code);
+  localStorage.setItem(STORAGE_KEY, code);
 }
 
 /** Maps app locale to BCP-47 used by Intl formatters. */

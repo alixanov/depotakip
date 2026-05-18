@@ -72,7 +72,8 @@ export async function login(
   password: string,
   ctx: AuthContext
 ): Promise<IssuedTokens> {
-  const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null });
+  // email уже .trim().toLowerCase() через loginSchema/emailSchema.
+  const user = await User.findOne({ email, deletedAt: null });
   if (!user) throw unauthorized("Email veya şifre hatalı");
   if (!user.active) throw unauthorized("Hesap devre dışı");
 
@@ -135,7 +136,8 @@ export async function me(userId: string) {
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null });
+  // email уже .trim().toLowerCase() через forgotPasswordSchema.
+  const user = await User.findOne({ email, deletedAt: null });
   if (!user) {
     // Don't reveal whether the email exists.
     logger.info({ email }, "forgot_password_unknown_email");

@@ -6,6 +6,7 @@ import { hash } from "../../lib/password.js";
 import { sendMail } from "../../lib/mailer.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
+import { paginate, tenantFilter } from "../../lib/repository.js";
 import { Role } from "../access/role.model.js";
 import { User, type UserDoc, loadRoleRef } from "../auth/user.model.js";
 
@@ -23,29 +24,16 @@ async function asSafeJSON(user: UserDoc): Promise<SafeUser> {
 }
 
 export async function list(orgId: string, query: ListQuery): Promise<PaginatedResponse<SafeUser>> {
-  const page = query.page ?? 1;
-  const limit = query.limit ?? 20;
-  const filter: Record<string, unknown> = { orgId: new Types.ObjectId(orgId), deletedAt: null };
+  const filter = tenantFilter(orgId);
   if (query.search) {
-    filter.$or = [
-      { email: { $regex: query.search, $options: "i" } },
-      { fullName: { $regex: query.search, $options: "i" } },
-    ];
+    Object.assign(filter, {
+      $or: [
+        { email: { $regex: query.search, $options: "i" } },
+        { fullName: { $regex: query.search, $options: "i" } },
+      ],
+    });
   }
-
-  const [docs, total] = await Promise.all([
-    User.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
-    User.countDocuments(filter),
-  ]);
-
-  const data = await Promise.all(docs.map((d) => asSafeJSON(d)));
-  return {
-    data,
-    pagination: { page, limit, total, hasMore: page * limit < total },
-  };
+  return paginate(User, filter, query, asSafeJSON);
 }
 
 export async function get(orgId: string, id: string): Promise<SafeUser> {
@@ -62,7 +50,8 @@ export async function create(
   orgId: string,
   input: CreateUserInput
 ): Promise<{ user: SafeUser; tempPassword: string }> {
-  const existing = await User.findOne({ email: input.email.toLowerCase() });
+  // email уже .trim().toLowerCase() через emailSchema (createUserSchema).
+  const existing = await User.findOne({ email: input.email });
   if (existing) throw conflict("Bu email zaten kayıtlı");
 
   // Confirm the role belongs to this org — protects against assigning a role

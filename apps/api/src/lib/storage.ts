@@ -56,7 +56,23 @@ export async function getPresignedGetUrl(key: string, ttlSeconds: number): Promi
 }
 
 export async function deleteObject(key: string): Promise<void> {
-  await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        endpoint: env.S3_ENDPOINT,
+        region: env.S3_REGION,
+        bucket: env.S3_BUCKET,
+        key,
+        forcePathStyle: env.S3_FORCE_PATH_STYLE,
+        accessKeyPreview: env.S3_ACCESS_KEY.slice(0, 4) + "***",
+      },
+      "s3_delete_object_failed"
+    );
+    throw err;
+  }
 }
 
 // Stable per-org/per-lot/per-photo layout. Tied to ObjectId values that

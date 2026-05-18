@@ -7,7 +7,9 @@ const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-/** CSRF defence layer 2 (layer 1 is SameSite=Strict on the refresh cookie).
+/** CSRF defence layer 2 (layer 1 is SameSite=Lax on the refresh cookie —
+ *  Strict was rejected because prod web + api live on different Railway
+ *  subdomains, see cookies.ts for the full rationale).
  *  For unsafe methods, require Origin/Referer to match the allow-list. */
 export function originCheck(req: Request, _res: Response, next: NextFunction): void {
   if (SAFE_METHODS.has(req.method)) return next();

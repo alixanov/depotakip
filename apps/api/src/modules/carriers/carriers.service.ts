@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import type { CreateCarrierInput, UpdateCarrierInput } from "@sadiyakargo/shared";
-import { notFound } from "../../lib/errors.js";
+import { conflict, notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Carrier } from "./carrier.model.js";
 
@@ -31,11 +31,22 @@ export async function get(orgId: string, id: string) {
 }
 
 export async function create(orgId: string, input: CreateCarrierInput) {
+  // Защита от случайных дубликатов: индекс не unique, поэтому проверяем
+  // на уровне сервиса. Если phone уже занят активным перевозчиком в этой
+  // орг — отказ. Soft-deleted перевозчики не блокируют (можно «вернуть»).
+  const existing = await Carrier.findOne(tenantFilter(orgId, { phone: input.phone }));
+  if (existing) throw conflict("Bu telefon numarası başka bir kargocuya atanmış");
   const doc = await Carrier.create({ orgId: new Types.ObjectId(orgId), ...input });
   return doc.toClient();
 }
 
 export async function update(orgId: string, id: string, input: UpdateCarrierInput) {
+  if (input.phone) {
+    const clash = await Carrier.findOne(
+      tenantFilter(orgId, { phone: input.phone, _id: { $ne: new Types.ObjectId(id) } })
+    );
+    if (clash) throw conflict("Bu telefon numarası başka bir kargocuya atanmış");
+  }
   const doc = await Carrier.findOneAndUpdate(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) }),
     { $set: input },

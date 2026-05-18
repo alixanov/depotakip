@@ -1,5 +1,13 @@
 "use strict";
 
+// Tight coupling с порядком миграций: эта миграция стартует ДО RBAC
+// (20260518000004), поэтому коллекций `roles`/`permissions` ещё нет, и
+// `ensureAdmin` (apps/api/src/modules/auth/auth.service.ts:204) не сработает —
+// он ищет системную роль "admin", которой пока не существует. Поэтому здесь
+// raw bcrypt + legacy строковое поле `role: "admin"`, которое позже RBAC-
+// миграция конвертирует в `roleId → roles._id`. Если переставите миграции
+// местами или добавите новую между ними — обновите эту логику.
+
 const { ObjectId } = require("mongodb");
 const bcrypt = require("bcryptjs");
 

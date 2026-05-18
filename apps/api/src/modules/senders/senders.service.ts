@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import type { CreateSenderInput, UpdateSenderInput } from "@sadiyakargo/shared";
-import { notFound } from "../../lib/errors.js";
+import { conflict, notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import { Sender } from "./sender.model.js";
 
@@ -30,11 +30,22 @@ export async function get(orgId: string, id: string) {
 }
 
 export async function create(orgId: string, input: CreateSenderInput) {
+  // Защита от случайных дубликатов в одной орг — индекс не unique
+  // (исторически могли существовать дубликаты), валидация на уровне service.
+  const existing = await Sender.findOne(tenantFilter(orgId, { phone: input.phone }));
+  if (existing) throw conflict("Bu telefon numarası başka bir göndericiye atanmış");
   const doc = await Sender.create({ orgId: new Types.ObjectId(orgId), ...input });
   return doc.toClient();
 }
 
 export async function update(orgId: string, id: string, input: UpdateSenderInput) {
+  // При смене телефона — та же проверка, исключая текущий sender.
+  if (input.phone) {
+    const clash = await Sender.findOne(
+      tenantFilter(orgId, { phone: input.phone, _id: { $ne: new Types.ObjectId(id) } })
+    );
+    if (clash) throw conflict("Bu telefon numarası başka bir göndericiye atanmış");
+  }
   const doc = await Sender.findOneAndUpdate(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) }),
     { $set: input },

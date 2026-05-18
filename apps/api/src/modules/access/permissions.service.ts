@@ -17,10 +17,11 @@ export async function get(id: string) {
 }
 
 export async function create(input: CreatePermissionInput) {
-  const existing = await Permission.findOne({ key: input.key.toLowerCase() });
+  // permissionKeySchema требует регексом `[a-z0-9_]` — input.key уже lowercase.
+  const existing = await Permission.findOne({ key: input.key });
   if (existing) throw conflict("Bu anahtar zaten kayıtlı");
   const doc = await Permission.create({
-    key: input.key.toLowerCase(),
+    key: input.key,
     label: input.label,
     description: input.description ?? "",
     group: input.group ?? null,

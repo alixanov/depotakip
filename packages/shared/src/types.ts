@@ -151,7 +151,6 @@ export interface ShipmentStatusEvent {
   changedBy: string;
   changedAt: string;
   comment: string;
-  proofPhoto: PhotoRef | null;
 }
 
 export interface Shipment {

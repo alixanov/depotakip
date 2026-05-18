@@ -7,8 +7,13 @@ import * as controller from "./carriers.controller.js";
 const router = Router();
 router.use(requireAuth);
 
-router.get("/", controller.list);
-router.get("/:id", validate({ params: idParamSchema }), controller.get);
+router.get("/", requirePermission("carriers:read"), controller.list);
+router.get(
+  "/:id",
+  requirePermission("carriers:read"),
+  validate({ params: idParamSchema }),
+  controller.get
+);
 router.post(
   "/",
   requirePermission("carriers:write"),
