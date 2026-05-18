@@ -12,7 +12,7 @@ export interface DashboardKpi {
   receivedByDay: { day: string; qty: number }[];
 }
 
-export type ReportType = "carriers" | "senders" | "categories" | "finance";
+export type ReportType = "carriers" | "senders" | "finance";
 
 export const reportsApi = {
   dashboard: (params: { from?: string; to?: string } = {}) => {

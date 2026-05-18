@@ -8,7 +8,7 @@ export interface WaybillDocumentProps {
     shortCode: string;
     shipmentDate: string;
     notes?: string;
-    items: { categoryName: string; qty: number }[];
+    items: { label: string; qty: number }[];
     totalItems: number;
     carrierFee: { amount: number; currency: string };
   };
@@ -81,7 +81,7 @@ export function WaybillDocument({
           <Text style={styles.sectionTitle}>İçerik</Text>
           {shipment.items.map((it, i) => (
             <View key={i} style={styles.row}>
-              <Text style={styles.label}>{it.categoryName}</Text>
+              <Text style={styles.label}>{it.label}</Text>
               <Text style={styles.value}>{it.qty} adet</Text>
             </View>
           ))}

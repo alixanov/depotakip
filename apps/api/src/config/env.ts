@@ -68,6 +68,30 @@ const envSchema = z.object({
     .string()
     .regex(/^[0-9a-fA-F]{24}$/, "DEFAULT_ORG_ID must be a 24-hex ObjectId")
     .default("000000000000000000000001"),
+
+  // S3-compatible object storage for lot photos (MinIO locally, R2/S3 in prod).
+  // Defaults match docker-compose minio + the bucket created by minio-init.
+  S3_ENDPOINT: z.string().url().default("http://localhost:9000"),
+  S3_REGION: z.string().default("us-east-1"),
+  S3_BUCKET: z.string().default("sadiyakargo-photos"),
+  S3_ACCESS_KEY: z.string().default("minio"),
+  S3_SECRET_KEY: z.string().default("minio12345"),
+  // MinIO and most S3-compatible providers (R2, Wasabi) require path-style URLs.
+  // Set to "false" only when targeting real AWS S3 (virtual-hosted-style).
+  S3_FORCE_PATH_STYLE: z
+    .string()
+    .transform((v) => v !== "false")
+    .default("true"),
+
+  // Lot photo limits — TZ §15 caps at 10 photos / 10 MB per lot.
+  LOT_PHOTO_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10 * 1024 * 1024),
+  LOT_PHOTO_MAX_COUNT: z.coerce.number().int().positive().default(10),
+  // Presigned GET URL TTL — TZ §9 mandates 1 hour.
+  LOT_PHOTO_PRESIGNED_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 });
 
 const parsed = envSchema.safeParse(process.env);

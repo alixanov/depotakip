@@ -5,27 +5,18 @@ import { InboundLot } from "../src/modules/lots/lot.model.ts";
 
 interface Seed {
   token: string;
-  adminToken: string;
   carrierId: string;
   lotId: string;
 }
 
 async function seed(): Promise<Seed> {
   const op = await loginAs("operator");
-  const admin = await loginAs("admin");
   const authOp = authHeader(op.accessToken);
-  const authAdmin = authHeader(admin.accessToken);
 
   const sender = await request(app)
     .post(apiPath("/senders"))
     .set(...authOp)
     .send({ fullName: "Lot Sender", phone: "+998901112233" })
-    .expect(201);
-
-  const category = await request(app)
-    .post(apiPath("/categories"))
-    .set(...authAdmin)
-    .send({ name: `Cat-${randomBytes(3).toString("hex")}` })
     .expect(201);
 
   const carrier = await request(app)
@@ -37,12 +28,11 @@ async function seed(): Promise<Seed> {
   const lot = await request(app)
     .post(apiPath("/lots"))
     .set(...authOp)
-    .send({ senderId: sender.body.id, categoryId: category.body.id, qtyIn: 10 })
+    .send({ senderId: sender.body.id, qtyIn: 10 })
     .expect(201);
 
   return {
     token: op.accessToken,
-    adminToken: admin.accessToken,
     carrierId: carrier.body.id,
     lotId: lot.body.id,
   };

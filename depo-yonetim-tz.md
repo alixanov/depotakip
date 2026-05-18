@@ -2,8 +2,8 @@
 
 ## Система управления складом и грузоперевозками «Depo Yönetim Sistemi»
 
-**Версия документа:** 2.1 (стек React 19.2 + Express + MongoDB, Node.js 24.15 LTS)
-**Дата:** 2026-05-17
+**Версия документа:** 2.2 (стек React 19.2 + Express + MongoDB, Node.js 24.15 LTS; категории удалены)
+**Дата:** 2026-05-18
 **Язык интерфейса:** турецкий (TR), админ-панель допускает русские подсказки.
 **Маршрут бизнеса:** Узбекистан (склад) → Турция (доставка).
 
@@ -29,8 +29,7 @@
 
 | Термин                              | Значение                                                                          |
 | ----------------------------------- | --------------------------------------------------------------------------------- |
-| **Mal / Товар**                     | Учётная единица — натуральные штуки одной категории.                              |
-| **Категория (kategori)**            | Тип товара: Elektronik, Tekstil, Gıda и т. д. Справочник редактируемый.           |
+| **Mal / Товар**                     | Учётная единица — натуральные штуки одного типа.                                  |
 | **Партия прихода (lot)**            | Один акт поступления на склад: «20 шт. электроники от клиента X на дату Y».       |
 | **Отправитель (sender, gönderici)** | Клиент, передавший товар на склад. Может быть «собственным» (виртуальный sender). |
 | **Перевозчик (carrier, kargocu)**   | Физлицо / компания, забирающая груз для доставки в Турцию.                        |
@@ -246,27 +245,13 @@ depo-yonetim/
 
 **Индексы:** `{ orgId: 1, phone: 1 }`, текстовый по `firstName lastName`.
 
-### 5.4. `categories` — справочник категорий
-
-```js
-{
-  _id, orgId,
-  name (unique within orgId),
-  icon: String,                  // emoji или ключ иконки
-  sortOrder: Number,
-  active: Boolean,
-}
-```
-
-Сидируется: Elektronik, Tekstil, Gıda, Kozmetik, Aksesuar, Diğer.
-
-### 5.5. `inboundLots` — приходы на склад
+### 5.4. `inboundLots` — приходы на склад
 
 ```js
 {
   _id, orgId,
   senderId: ObjectId → senders,
-  categoryId: ObjectId → categories,
+  label: String,                 // опциональное человекочитаемое имя
   qtyIn: Number,                 // > 0
   qtyAvailable: Number,          // денормализовано, обновляется в транзакции
   unitPrice: { amount: Number, currency: 'USD'|'UZS'|'TRY' } | null,
@@ -283,11 +268,11 @@ depo-yonetim/
 }
 ```
 
-**Индексы:** `{ orgId: 1, senderId: 1, status: 1 }`, `{ orgId: 1, categoryId: 1, qtyAvailable: 1 }`, `{ orgId: 1, receivedAt: -1 }`.
+**Индексы:** `{ orgId: 1, senderId: 1, status: 1 }`, `{ orgId: 1, receivedAt: -1 }`.
 
 **Инвариант:** `qtyAvailable = qtyIn - sum(активных shipmentItems по этому lotId)`. Поддерживается транзакционно при создании/отмене отправок.
 
-### 5.6. `shipments` — отправки
+### 5.5. `shipments` — отправки
 
 ```js
 {
@@ -320,7 +305,7 @@ depo-yonetim/
 
 **Индексы:** `{ orgId: 1, carrierId: 1, status: 1 }`, `{ orgId: 1, status: 1, shipmentDate: -1 }`, `{ orgId: 1, shortCode: 1 }` unique, `{ publicTrackingToken: 1 }` unique, `{ 'items.lotId': 1 }`.
 
-### 5.7. `counters` — генератор последовательностей
+### 5.6. `counters` — генератор последовательностей
 
 ```js
 { _id: 'shipment_2026', seq: Number }
@@ -328,7 +313,7 @@ depo-yonetim/
 
 Атомарный инкремент через `findOneAndUpdate({ $inc: { seq: 1 } }, { upsert: true })`.
 
-### 5.8. `transactions` — финансовые операции
+### 5.7. `transactions` — финансовые операции
 
 ```js
 {
@@ -356,7 +341,7 @@ depo-yonetim/
 
 **Индексы:** `{ orgId: 1, 'counterparty.type': 1, 'counterparty.id': 1, txDate: -1 }`, `{ orgId: 1, shipmentId: 1 }`, `{ orgId: 1, txDate: -1 }`.
 
-### 5.9. `exchangeRates`
+### 5.8. `exchangeRates`
 
 ```js
 {
@@ -370,7 +355,7 @@ depo-yonetim/
 
 **Индекс:** `{ currency: 1, rateDate: -1 }` unique. Обновляется cron'ом раз в сутки из `cbu.uz`.
 
-### 5.10. `notificationLog`
+### 5.9. `notificationLog`
 
 ```js
 {
@@ -391,7 +376,7 @@ depo-yonetim/
 
 **Индексы:** `{ orgId: 1, status: 1, createdAt: -1 }`, TTL-индекс на `createdAt` 365 дней.
 
-### 5.11. `notificationTemplates`
+### 5.10. `notificationTemplates`
 
 ```js
 {
@@ -406,7 +391,7 @@ depo-yonetim/
 
 **Индекс:** `{ orgId: 1, key: 1, channel: 1, language: 1 }` unique.
 
-### 5.12. `auditLog`
+### 5.11. `auditLog`
 
 ```js
 {
@@ -424,7 +409,7 @@ depo-yonetim/
 
 **Индексы:** `{ orgId: 1, at: -1 }`, `{ entityType: 1, entityId: 1 }`. TTL 2 года.
 
-### 5.13. Транзакции MongoDB (ACID)
+### 5.12. Транзакции MongoDB (ACID)
 
 Используется `session.withTransaction()` для критичных операций:
 
@@ -434,7 +419,7 @@ depo-yonetim/
 
 > **Обязательно:** MongoDB должна быть в режиме replica set. На Atlas — по умолчанию.
 
-### 5.14. Расчёт балансов
+### 5.13. Расчёт балансов
 
 Балансы вычисляются on-the-fly через aggregation pipeline:
 
@@ -455,10 +440,9 @@ db.transactions.aggregate([
 
 Для производительности — материализованный view `carrierBalances` обновляется триггером на запись `transactions` (через change stream worker или explicit recalc после mutation).
 
-### 5.15. Текущий остаток
+### 5.14. Текущий остаток
 
-- **Быстрый запрос** «сколько на складе всего по категории»: агрегация по `inboundLots` с `$match: { qtyAvailable: { $gt: 0 } }` + `$group` по `categoryId`. С индексом `{ orgId: 1, categoryId: 1, qtyAvailable: 1 }` это O(log n).
-- **Остаток по отправителю**: аналогично с `$group: senderId`.
+- **Остаток по отправителю**: агрегация по `inboundLots` с `$match: { qtyAvailable: { $gt: 0 } }` + `$group: senderId`. С индексом `{ orgId: 1, senderId: 1, status: 1 }` это O(log n).
 - **Детально по партиям**: прямой запрос с фильтрами.
 
 ---
@@ -489,7 +473,6 @@ db.transactions.aggregate([
 
 ### 6.3. Справочники
 
-- **Категории:** `GET/POST/PATCH/DELETE /api/categories`.
 - **Валюты и курсы:** `GET /api/exchange-rates?currency=UZS&from=...&to=...`, `POST /api/exchange-rates` (ручной ввод), `POST /api/exchange-rates/refresh` (форсировать pull из ЦБ РУз).
 - **Шаблоны уведомлений:** `GET/POST/PATCH /api/notification-templates`.
 
@@ -504,7 +487,7 @@ db.transactions.aggregate([
 
 - `POST /api/lots` (multipart/form-data): поля + до 10 фото.
   - Backend: multer принимает в память, sharp ресайзит до max 1600 px и JPEG q=80, загружает в S3, в документе сохраняет только `storageKey`.
-- `GET /api/lots?senderId=&categoryId=&from=&to=&status=&page=&limit=`.
+- `GET /api/lots?senderId=&from=&to=&status=&page=&limit=`.
 - `PATCH /api/lots/:id` — только заметки и фото (количество менять нельзя если есть отгрузки).
 - `DELETE /api/lots/:id` — только если `qtyIn == qtyAvailable` и нет отгрузок; иначе 409.
 - `GET /api/lots/:id/photos/:photoId` — отдаёт подписанный URL S3 (TTL 1 час).
@@ -512,7 +495,6 @@ db.transactions.aggregate([
 
 ### 6.6. Склад (остатки)
 
-- `GET /api/stock/by-category` — агрегация.
 - `GET /api/stock/by-sender` — агрегация.
 - `GET /api/stock/lots?available=true` — детально.
 
@@ -589,7 +571,6 @@ QR-коды через `qrcode` npm-пакет, генерируются как 
 - `GET /api/reports/dashboard?currency=USD` — KPI + временные ряды.
 - `GET /api/reports/carriers?from=&to=&currency=` — таблица.
 - `GET /api/reports/senders?...`.
-- `GET /api/reports/categories?...`.
 - `GET /api/reports/finance?...`.
 - `GET /api/reports/:type/export?format=csv|xlsx` — потоковая выдача файла (через `exceljs` streaming).
 
@@ -764,7 +745,7 @@ Pipeline:
 Хотя MongoDB schemaless, используем **migrate-mongo** для:
 
 - создания индексов;
-- сидирования справочников (категории, валюты, шаблоны уведомлений);
+- сидирования справочников (валюты, шаблоны уведомлений);
 - бэкфилла новых полей (`updateMany`);
 - переходов формата (split / merge коллекций).
 
@@ -797,7 +778,7 @@ Pipeline:
 
 **Этап 2. Справочники (1 неделя)**
 
-- Категории, senders, carriers — CRUD.
+- senders, carriers — CRUD.
 - Валюты, курсы, cron-скрипт обновления из cbu.uz.
 - UI таблиц, форм, поиска.
 

@@ -45,15 +45,6 @@ export type Currency = (typeof CURRENCIES)[number];
 export const ROLES = ["admin", "operator", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
-export const DEFAULT_CATEGORIES = [
-  "Elektronik",
-  "Tekstil",
-  "Gıda",
-  "Kozmetik",
-  "Aksesuar",
-  "Diğer",
-] as const;
-
 export const NOTIFICATION_CHANNELS = ["sms", "telegram"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 

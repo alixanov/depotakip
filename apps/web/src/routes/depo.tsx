@@ -5,9 +5,10 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CURRENCIES, type CreateLotInput, type InboundLot } from "@sadiyakargo/shared";
-import { Download, Plus, Trash2 } from "lucide-react";
+import { Download, ImageIcon, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -19,13 +20,21 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { FieldError, FormError } from "@/components/ui/form-error";
 import { downloadReceiptPdf, lotsApi } from "@/lib/api/lots";
-import { categoriesApi } from "@/lib/api/categories";
 import { sendersApi } from "@/lib/api/senders";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requireAuth } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
-import { formatDate, formatMoneyObject, toMinor } from "@/lib/format";
+import { formatDate, formatMoneyObject, isoDateOnly, toMinor } from "@/lib/format";
 import { LotStatusPill } from "@/components/ui/status-pill";
+import { DatePicker } from "@/components/ui/date-picker";
+import { PhotoPicker } from "@/components/PhotoPicker";
+import { PhotoGalleryLightbox } from "@/components/PhotoGalleryLightbox";
+
+// Mirrors apps/api/.env LOT_PHOTO_MAX_COUNT/BYTES. Server-side limits are the
+// source of truth; these are UX hints + early rejection so the user doesn't
+// upload a 50MB file just to get a 413 back.
+const PHOTO_MAX_COUNT = 10;
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 import {
   Select,
   SelectContent,
@@ -42,7 +51,6 @@ const depoSearchSchema = z.object({
   tab: z.enum(TABS).optional().catch(undefined),
   page: z.coerce.number().int().positive().optional().catch(undefined),
   senderId: z.string().optional().catch(undefined),
-  categoryId: z.string().optional().catch(undefined),
   available: z.coerce.boolean().optional().catch(undefined),
 });
 
@@ -93,38 +101,31 @@ function LotsTab() {
   const navigate = useNavigate({ from: Route.fullPath });
   const page = search.page ?? 1;
   const senderFilter = search.senderId ?? "";
-  const categoryFilter = search.categoryId ?? "";
   const availableOnly = search.available ?? true;
 
   const update = (patch: Partial<typeof search>) =>
     navigate({ search: (s) => ({ ...s, ...patch }) });
   const setPage = (p: number) => update({ page: p === 1 ? undefined : p });
   const setSenderFilter = (id: string) => update({ page: undefined, senderId: id || undefined });
-  const setCategoryFilter = (id: string) =>
-    update({ page: undefined, categoryId: id || undefined });
   const setAvailableOnly = (v: boolean) =>
     update({ page: undefined, available: v ? undefined : false });
 
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [galleryLot, setGalleryLot] = useState<InboundLot | null>(null);
   const { t } = useTranslation();
 
   const sendersQuery = useQuery({
     queryKey: ["senders", "all"],
     queryFn: () => sendersApi.list({ limit: 200 }),
   });
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: () => categoriesApi.list({ active: true }),
-  });
 
   const lotsQuery = useQuery({
-    queryKey: ["lots", { page, senderFilter, categoryFilter, availableOnly }],
+    queryKey: ["lots", { page, senderFilter, availableOnly }],
     queryFn: () =>
       lotsApi.list({
         page,
         limit: 20,
         senderId: senderFilter || undefined,
-        categoryId: categoryFilter || undefined,
         available: availableOnly ? true : undefined,
       }),
   });
@@ -136,7 +137,6 @@ function LotsTab() {
 
   const senderName = (id: string) =>
     sendersQuery.data?.data.find((s) => s.id === id)?.fullName || "—";
-  const categoryName = (id: string) => categoriesQuery.data?.find((c) => c.id === id)?.name || "—";
 
   const columns: Column<InboundLot>[] = [
     {
@@ -154,11 +154,6 @@ function LotsTab() {
           {l.label && <div className="truncate text-xs text-muted-foreground">{l.label}</div>}
         </div>
       ),
-    },
-    {
-      key: "category",
-      header: t("depo:col_category"),
-      cell: (l) => categoryName(l.categoryId),
     },
     {
       key: "qty",
@@ -192,10 +187,22 @@ function LotsTab() {
     {
       key: "actions",
       header: "",
-      width: "100px",
+      width: "140px",
       className: "text-right",
       cell: (l) => (
         <div className="flex justify-end gap-1">
+          {l.photos.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setGalleryLot(l)}
+              aria-label={t("photo:open_gallery_aria")}
+              className="gap-1 px-2"
+            >
+              <ImageIcon className="h-4 w-4" />
+              <span className="text-xs tabular-nums">{l.photos.length}</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -231,19 +238,6 @@ function LotsTab() {
             placeholder={t("depo:filter_senders")}
           />
         </div>
-        <div className="w-48">
-          <Combobox
-            options={[
-              { id: "", name: t("depo:filter_categories") },
-              ...(categoriesQuery.data ?? []),
-            ]}
-            value={categoryFilter || ""}
-            onChange={setCategoryFilter}
-            getValue={(c) => c.id}
-            getLabel={(c) => c.name}
-            placeholder={t("depo:filter_categories")}
-          />
-        </div>
         <label className="flex h-11 items-center gap-1.5 text-xs">
           <input
             type="checkbox"
@@ -271,7 +265,7 @@ function LotsTab() {
                       <p className="truncate text-xs font-medium text-foreground/80">{l.label}</p>
                     )}
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {categoryName(l.categoryId)} · {formatDate(l.receivedAt)}
+                      {formatDate(l.receivedAt)}
                     </p>
                   </div>
                   <LotStatusPill status={l.status} />
@@ -289,6 +283,18 @@ function LotsTab() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    {l.photos.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setGalleryLot(l)}
+                        aria-label={t("photo:open_gallery_aria")}
+                        className="gap-1 px-2"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        <span className="text-xs tabular-nums">{l.photos.length}</span>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -325,6 +331,16 @@ function LotsTab() {
           }
         }}
       />
+
+      {galleryLot && (
+        <PhotoGalleryLightbox
+          lotId={galleryLot.id}
+          photos={galleryLot.photos}
+          open={!!galleryLot}
+          onOpenChange={(o) => !o && setGalleryLot(null)}
+          canDelete={role === "admin"}
+        />
+      )}
     </div>
   );
 }
@@ -336,7 +352,6 @@ function LotsTab() {
  */
 const receiveFormSchema = z.object({
   senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Gönderici seçin"),
-  categoryId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Kategori seçin"),
   label: z.string().trim().max(120).default(""),
   qtyIn: z.coerce.number().int().positive(),
   unitPriceAmount: z.coerce.number().nonnegative().optional(),
@@ -350,28 +365,24 @@ type ReceiveFormValues = z.infer<typeof receiveFormSchema>;
 function ReceiveTab() {
   const qc = useQueryClient();
   const [serverError, setServerError] = useState("");
+  const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
   const { t } = useTranslation();
 
   const sendersQuery = useQuery({
     queryKey: ["senders", "all"],
     queryFn: () => sendersApi.list({ limit: 200 }),
   });
-  const categoriesQuery = useQuery({
-    queryKey: ["categories", "all"],
-    queryFn: () => categoriesApi.list({ active: true }),
-  });
 
   const form = useForm<ReceiveFormValues>({
     resolver: zodResolver(receiveFormSchema),
     defaultValues: {
       senderId: "",
-      categoryId: "",
       label: "",
       qtyIn: 1,
       unitPriceAmount: undefined,
       unitPriceCurrency: "USD",
       notes: "",
-      receivedAt: new Date().toISOString(),
+      receivedAt: isoDateOnly(),
     },
   });
   const handleApiError = useApiFormErrors(form);
@@ -394,7 +405,6 @@ function ReceiveTab() {
       setServerError("");
       const payload: CreateLotInput = {
         senderId: values.senderId,
-        categoryId: values.categoryId,
         label: values.label || undefined,
         qtyIn: values.qtyIn,
         unitPrice:
@@ -402,22 +412,38 @@ function ReceiveTab() {
             ? { amount: toMinor(values.unitPriceAmount), currency: values.unitPriceCurrency }
             : null,
         notes: values.notes,
-        receivedAt: values.receivedAt,
+        // DatePicker keeps yyyy-mm-dd; backend createLotSchema requires full ISO.
+        receivedAt: new Date(values.receivedAt).toISOString(),
       };
       try {
         const lot = await create.mutateAsync(payload);
         toast.success(t("depo:toast_created"), {
           description: t("depo:toast_created_desc", { code: lot.id.slice(-6) }),
         });
+        // Two-step photo upload (TZ §6.5 — POST /lots/:id/photos). On failure
+        // the lot is already in the DB; surface a separate toast so the user
+        // can re-attempt via the gallery later.
+        if (stagedPhotos.length > 0) {
+          try {
+            await lotsApi.uploadPhotos(lot.id, stagedPhotos);
+            toast.success(t("photo:toast_uploaded", { n: stagedPhotos.length }));
+          } catch (err) {
+            toast.error(t("photo:toast_upload_failed"), {
+              description: err instanceof Error ? err.message : undefined,
+              duration: 8000,
+            });
+          }
+          qc.invalidateQueries({ queryKey: ["lots"] });
+        }
+        setStagedPhotos([]);
         form.reset({
           senderId: mode === "new" ? values.senderId : "",
-          categoryId: "",
           label: "",
           qtyIn: 1,
           unitPriceAmount: undefined,
           unitPriceCurrency: values.unitPriceCurrency,
           notes: "",
-          receivedAt: new Date().toISOString(),
+          receivedAt: isoDateOnly(),
         });
       } catch {
         // handled by mutation.onError → setServerError
@@ -474,34 +500,27 @@ function ReceiveTab() {
             <FieldError>{form.formState.errors.senderId?.message}</FieldError>
           </div>
 
+          {/* Pair "Дата приёмки" with sender — both are receipt-event metadata.
+              Товарные поля (qty, unit price) идут ниже своей группой. */}
           <div className="space-y-1.5">
-            <Label>{t("depo:col_category")}</Label>
+            <Label>{t("depo:form_receivedAt")}</Label>
             <Controller
-              name="categoryId"
+              name="receivedAt"
               control={form.control}
               render={({ field }) => (
-                <Combobox
-                  options={categoriesQuery.data ?? []}
-                  value={field.value || ""}
-                  onChange={field.onChange}
-                  getValue={(c) => c.id}
-                  getLabel={(c) => c.name}
-                  renderOption={(c) => (
-                    <span className="flex items-center gap-2">
-                      {c.icon && <span>{c.icon}</span>}
-                      <span>{c.name}</span>
-                    </span>
-                  )}
-                  placeholder={t("select")}
-                  aria-invalid={!!form.formState.errors.categoryId}
+                <DatePicker
+                  value={field.value}
+                  onChange={(v) => field.onChange(v ?? isoDateOnly())}
                 />
               )}
             />
-            <FieldError>{form.formState.errors.categoryId?.message}</FieldError>
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>{t("depo:form_label")}</Label>
+            <Label>
+              {t("depo:form_label")}{" "}
+              <span className="font-normal text-muted-foreground">{t("optional")}</span>
+            </Label>
             <Input
               {...form.register("label")}
               placeholder={t("depo:form_label_ph")}
@@ -559,20 +578,23 @@ function ReceiveTab() {
             <FieldError>{form.formState.errors.unitPriceAmount?.message}</FieldError>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>{t("depo:form_receivedAt")}</Label>
-            <Input
-              type="date"
-              {...form.register("receivedAt", {
-                setValueAs: (v) => (v ? new Date(v).toISOString() : new Date().toISOString()),
-              })}
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>
+              {t("depo:form_notes")}{" "}
+              <span className="font-normal text-muted-foreground">{t("optional")}</span>
+            </Label>
+            <Textarea {...form.register("notes")} placeholder={t("depo:form_notes_ph")} rows={3} />
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>{t("depo:form_notes")}</Label>
-            <Input {...form.register("notes")} placeholder={t("depo:form_notes_ph")} />
+            <Label>{t("depo:form_photos")}</Label>
+            <PhotoPicker
+              value={stagedPhotos}
+              onChange={setStagedPhotos}
+              maxCount={PHOTO_MAX_COUNT}
+              maxBytes={PHOTO_MAX_BYTES}
+              disabled={form.formState.isSubmitting}
+            />
           </div>
 
           <div className="sm:col-span-2 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -603,18 +625,13 @@ function ReceiveTab() {
 
 function StockTab() {
   const { t } = useTranslation();
-  const byCategory = useQuery({
-    queryKey: ["lots", "stock", "by-category"],
-    queryFn: lotsApi.stockByCategory,
-  });
   const bySender = useQuery({
     queryKey: ["lots", "stock", "by-sender"],
     queryFn: lotsApi.stockBySender,
   });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <StockCard title={t("depo:stock_by_category")} query={byCategory} />
+    <div className="grid gap-4">
       <StockCard title={t("depo:stock_by_sender")} query={bySender} />
     </div>
   );

@@ -1,21 +1,17 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { randomBytes } from "node:crypto";
 import { app, apiPath, authHeader, loginAs, request } from "./helpers.ts";
 
 interface Seed {
   token: string;
   senderId: string;
   carrierId: string;
-  categoryId: string;
   lotId: string;
   shipmentId: string;
 }
 
 async function seed(): Promise<Seed> {
   const op = await loginAs("operator");
-  const admin = await loginAs("admin");
   const authOp = authHeader(op.accessToken);
-  const authAdmin = authHeader(admin.accessToken);
 
   const sender = await request(app)
     .post(apiPath("/senders"))
@@ -27,15 +23,10 @@ async function seed(): Promise<Seed> {
     .set(...authOp)
     .send({ firstName: "Rep", lastName: "Carrier", phone: "+905550001122" })
     .expect(201);
-  const category = await request(app)
-    .post(apiPath("/categories"))
-    .set(...authAdmin)
-    .send({ name: `Cat-${randomBytes(3).toString("hex")}` })
-    .expect(201);
   const lot = await request(app)
     .post(apiPath("/lots"))
     .set(...authOp)
-    .send({ senderId: sender.body.id, categoryId: category.body.id, qtyIn: 20 })
+    .send({ senderId: sender.body.id, qtyIn: 20 })
     .expect(201);
   const shipment = await request(app)
     .post(apiPath("/shipments"))
@@ -51,7 +42,6 @@ async function seed(): Promise<Seed> {
     token: op.accessToken,
     senderId: sender.body.id,
     carrierId: carrier.body.id,
-    categoryId: category.body.id,
     lotId: lot.body.id,
     shipmentId: shipment.body.id,
   };
@@ -101,17 +91,6 @@ describe("GET /reports/:type", () => {
     expect(row.lots).toBe(1);
     expect(row.qtyIn).toBe(20);
     expect(row.chargesUsd).toBe(1500);
-  });
-
-  it("categories report aggregates qtyAvailable", async () => {
-    const ctx = await seed();
-    const res = await request(app)
-      .get(apiPath("/reports/categories"))
-      .set(...authHeader(ctx.token))
-      .expect(200);
-    const row = res.body.find((r: { categoryId: string }) => r.categoryId === ctx.categoryId);
-    expect(row.qtyIn).toBe(20);
-    expect(row.qtyAvailable).toBe(16);
   });
 
   it("finance report has one row per tx date", async () => {

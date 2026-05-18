@@ -17,12 +17,20 @@ export interface Money {
 }
 
 export interface PhotoRef {
+  /** ObjectId; used in /lots/:id/photos/:photoId endpoints. */
+  id: string;
   storageKey: string;
   mimeType: string;
   sizeBytes: number;
   width?: number;
   height?: number;
   uploadedAt: string;
+}
+
+export interface SignedPhotoUrlResponse {
+  url: string;
+  /** ISO timestamp when the presigned URL stops working. */
+  expiresAt: string;
 }
 
 export interface User {
@@ -65,18 +73,9 @@ export interface Carrier {
   updatedAt: string;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  sortOrder: number;
-  active: boolean;
-}
-
 export interface InboundLot {
   id: string;
   senderId: string;
-  categoryId: string;
   label: string;
   qtyIn: number;
   qtyAvailable: number;

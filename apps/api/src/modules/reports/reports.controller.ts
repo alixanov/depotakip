@@ -40,16 +40,6 @@ const REPORT_DEFS = {
       { key: "balanceUsd", header: "Bakiye USD-cent" },
     ],
   },
-  categories: {
-    fetch: service.categories,
-    columns: [
-      { key: "categoryId", header: "Category ID" },
-      { key: "name", header: "Kategori" },
-      { key: "lots", header: "Partiler" },
-      { key: "qtyIn", header: "Adet" },
-      { key: "qtyAvailable", header: "Stoğa" },
-    ],
-  },
   finance: {
     fetch: service.finance,
     columns: [

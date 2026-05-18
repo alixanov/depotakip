@@ -5,6 +5,11 @@ export const objectIdSchema = z.string().regex(/^[0-9a-fA-F]{24}$/, "Geçersiz i
 
 export const idParamSchema = z.object({ id: objectIdSchema });
 
+export const lotPhotoIdParamSchema = z.object({
+  id: objectIdSchema,
+  photoId: objectIdSchema,
+});
+
 export const moneySchema = z.object({
   amount: z.number().int().nonnegative(),
   currency: z.enum(CURRENCIES),

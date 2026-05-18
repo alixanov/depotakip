@@ -27,7 +27,7 @@
 //
 // Every created doc carries DEMO_TAG in `notes` so clean-demo.mjs can purge it.
 
-import { MongoClient, ObjectId } from "mongodb";
+import { MongoClient } from "mongodb";
 import { randomUUID } from "node:crypto";
 
 if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
@@ -251,15 +251,6 @@ async function seedRates(client) {
   return added;
 }
 
-async function readCategories(client) {
-  const cats = await client
-    .db()
-    .collection("categories")
-    .find({ orgId: new ObjectId(ORG_ID), deletedAt: null })
-    .toArray();
-  return cats;
-}
-
 // ---------- main flow ----------
 async function main() {
   console.log(`[setup] API=${API_BASE}  origin=${WEB_ORIGIN}  org=${ORG_ID}  tag="${DEMO_TAG}"`);
@@ -273,12 +264,6 @@ async function main() {
     console.log("[2/8] Bootstrapping exchangeRates ...");
     const added = await seedRates(client);
     console.log(`       inserted ${added} new rate docs (existing dates left intact)`);
-
-    const categories = await readCategories(client);
-    if (categories.length === 0) {
-      throw new Error("No categories for org — run `npm run migrate:up` first.");
-    }
-    console.log(`       found ${categories.length} categories`);
 
     console.log("[3/8] Creating 20 senders via API ...");
     const senders = [];
@@ -312,7 +297,6 @@ async function main() {
     const lots = [];
     for (let i = 0; i < 80; i++) {
       const sender = pick(senders);
-      const category = pick(categories);
       const tail = pick(NOTES_TAILS);
       // Label = "<sender first name> — <tail phrase>" (Turkish-style).
       const label = `${sender.fullName.split(" ")[0]} — ${tail}`;
@@ -327,7 +311,6 @@ async function main() {
             : rand(5_000_000, 200_000_000);
       const lot = await api("POST", "/lots", {
         senderId: sender.id,
-        categoryId: category._id.toString(),
         label,
         qtyIn: rand(5, 150),
         unitPrice: { amount: unitPriceMinor, currency },

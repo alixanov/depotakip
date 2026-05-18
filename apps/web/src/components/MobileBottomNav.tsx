@@ -9,7 +9,6 @@ import {
   Package,
   ScrollText,
   ShieldCheck,
-  Tag,
   Truck,
   Users as UsersIcon,
   UserCircle,
@@ -106,9 +105,6 @@ export function MobileBottomNav() {
               {isAdmin && (
                 <>
                   <DrawerSectionLabel>{t("profile:info_role")}: admin</DrawerSectionLabel>
-                  <DrawerLink to="/admin/categories" onClose={close} icon={<Tag />}>
-                    {t("nav:categories")}
-                  </DrawerLink>
                   <DrawerLink to="/admin/exchange-rates" onClose={close} icon={<Coins />}>
                     {t("nav:rates")}
                   </DrawerLink>

@@ -20,7 +20,6 @@ const ENTITY_TYPES = [
   "users",
   "senders",
   "carriers",
-  "categories",
   "lots",
   "shipments",
   "transactions",

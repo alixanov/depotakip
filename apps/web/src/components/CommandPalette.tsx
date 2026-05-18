@@ -11,7 +11,6 @@ import {
   Search,
   ShieldCheck,
   Sun,
-  Tag,
   Truck,
   Users as UsersIcon,
   UserCircle,
@@ -95,7 +94,6 @@ export function CommandPalette() {
       [
         canMutate && { key: "/admin/senders", label: t("nav:senders"), icon: UsersIcon },
         canMutate && { key: "/admin/carriers", label: t("nav:carriers"), icon: Truck },
-        isAdmin && { key: "/admin/categories", label: t("nav:categories"), icon: Tag },
         isAdmin && { key: "/admin/exchange-rates", label: t("nav:rates"), icon: Coins },
         isAdmin && { key: "/admin/users", label: t("nav:users"), icon: ShieldCheck },
         isAdmin && { key: "/admin/notifications", label: t("nav:notifications"), icon: Bell },

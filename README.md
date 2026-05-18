@@ -40,7 +40,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 # Optionally set ADMIN_EMAIL + ADMIN_PASSWORD to seed the first admin user
 
 docker compose up -d             # mongo (rs0), redis, minio
-npm run migrate:up               # creates indexes + seeds categories + notification templates
+npm run migrate:up               # creates indexes + seeds notification templates
                                  # + first admin if ADMIN_EMAIL/PASSWORD are set
 ```
 
@@ -118,7 +118,7 @@ Implementation follows the 11 stages laid out in `depo-yonetim-tz.md` §11:
 | ----- | ----------------------------------------------------------------------- | ------- |
 | **0** | Foundation: TS/Express 5 + React 19/Vite 6/Tailwind 4 + shared + docker | ✅ done |
 | **1** | Auth + Users: refresh cookies + ротация + RBAC + UsersPage admin        | ✅ done |
-| **2** | Reference data: categories, senders, carriers, exchange rates           | ✅ done |
+| **2** | Reference data: senders, carriers, exchange rates                       | ✅ done |
 | **3** | Inventory: inboundLots + stock aggregation + PDF receipt                | ✅ done |
 | **4** | Shipments: items + statusHistory + tracking + Socket.IO + waybill       | ✅ done |
 | **5** | Finance: transactions + multi-currency + balances + receipts            | ✅ done |

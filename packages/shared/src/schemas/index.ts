@@ -3,7 +3,6 @@ export * from "./auth.js";
 export * from "./user.js";
 export * from "./sender.js";
 export * from "./carrier.js";
-export * from "./category.js";
 export * from "./lot.js";
 export * from "./shipment.js";
 export * from "./transaction.js";

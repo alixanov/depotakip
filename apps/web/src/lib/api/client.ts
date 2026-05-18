@@ -35,17 +35,28 @@ interface RawResponse {
 }
 
 async function rawFetch(path: string, opts: RequestOptions): Promise<RawResponse> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const isFormData = typeof FormData !== "undefined" && opts.body instanceof FormData;
+  const headers: Record<string, string> = {};
+  // Don't set Content-Type for FormData — the browser appends the multipart
+  // boundary itself; setting it manually breaks parsing on the server.
+  if (!isFormData) headers["Content-Type"] = "application/json";
   if (opts.auth !== false) {
     const token = useAuthStore.getState().accessToken;
     if (token) headers.Authorization = `Bearer ${token}`;
   }
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
+  const body =
+    opts.body === undefined
+      ? undefined
+      : isFormData
+        ? (opts.body as FormData)
+        : JSON.stringify(opts.body);
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: opts.method ?? "GET",
     headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body,
     credentials: "include",
     signal: opts.signal,
   });

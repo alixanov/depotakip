@@ -1,11 +1,30 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import sharp from "sharp";
 import { app, apiPath, authHeader, loginAs, request } from "./helpers.ts";
 import type { Role } from "@sadiyakargo/shared";
+
+// In-memory replacement for src/lib/storage.ts. Lets us assert puts/deletes
+// happen without touching MinIO/S3. Defined via vi.hoisted so the same Map
+// is shared between the mock and the test bodies after vi.mock hoists.
+const { fakeStore } = vi.hoisted(() => ({
+  fakeStore: new Map<string, Buffer>(),
+}));
+
+vi.mock("../src/lib/storage.ts", () => ({
+  putObject: async (key: string, body: Buffer) => {
+    fakeStore.set(key, body);
+  },
+  getPresignedGetUrl: async (key: string) => `https://mock-s3.local/${key}?sig=fake`,
+  deleteObject: async (key: string) => {
+    fakeStore.delete(key);
+  },
+  buildLotPhotoKey: (orgId: string, lotId: string, photoId: string) =>
+    `orgs/${orgId}/lots/${lotId}/photos/${photoId}.jpg`,
+}));
 
 interface SeedResult {
   token: string;
   senderId: string;
-  categoryId: string;
 }
 
 async function seed(role: Role = "operator"): Promise<SeedResult> {
@@ -22,19 +41,14 @@ async function seed(role: Role = "operator"): Promise<SeedResult> {
     })
     .expect(201);
 
-  const category = await request(app)
-    .post(apiPath("/categories"))
-    .set(...authHeader((await loginAs("admin")).accessToken))
-    .send({ name: "Test-Cat" })
-    .expect(201);
-
-  return { token: session.accessToken, senderId: sender.body.id, categoryId: category.body.id };
+  return { token: session.accessToken, senderId: sender.body.id };
 }
 
 describe("/lots", () => {
   let ctx: SeedResult;
   beforeEach(async () => {
     ctx = await seed("operator");
+    fakeStore.clear();
   });
 
   it("rejects viewer create", async () => {
@@ -42,11 +56,7 @@ describe("/lots", () => {
     await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(v.accessToken))
-      .send({
-        senderId: ctx.senderId,
-        categoryId: ctx.categoryId,
-        qtyIn: 10,
-      })
+      .send({ senderId: ctx.senderId, qtyIn: 10 })
       .expect(403);
   });
 
@@ -54,47 +64,29 @@ describe("/lots", () => {
     const res = await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
-      .send({
-        senderId: ctx.senderId,
-        categoryId: ctx.categoryId,
-        qtyIn: 20,
-        notes: "test",
-      })
+      .send({ senderId: ctx.senderId, qtyIn: 20, notes: "test" })
       .expect(201);
     expect(res.body.qtyIn).toBe(20);
     expect(res.body.qtyAvailable).toBe(20);
     expect(res.body.status).toBe("in_stock");
+    expect(res.body.photos).toEqual([]);
   });
 
-  it("rejects unknown sender / category", async () => {
+  it("rejects unknown sender", async () => {
     await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
-      .send({
-        senderId: "ffffffffffffffffffffffff",
-        categoryId: ctx.categoryId,
-        qtyIn: 5,
-      })
-      .expect(400);
-
-    await request(app)
-      .post(apiPath("/lots"))
-      .set(...authHeader(ctx.token))
-      .send({
-        senderId: ctx.senderId,
-        categoryId: "ffffffffffffffffffffffff",
-        qtyIn: 5,
-      })
+      .send({ senderId: "ffffffffffffffffffffffff", qtyIn: 5 })
       .expect(400);
   });
 
-  it("filters by sender / category / available", async () => {
+  it("filters by sender / available", async () => {
     const auth = authHeader(ctx.token);
     for (let i = 0; i < 3; i += 1) {
       await request(app)
         .post(apiPath("/lots"))
         .set(...auth)
-        .send({ senderId: ctx.senderId, categoryId: ctx.categoryId, qtyIn: 5 })
+        .send({ senderId: ctx.senderId, qtyIn: 5 })
         .expect(201);
     }
     const list = await request(app)
@@ -109,7 +101,7 @@ describe("/lots", () => {
     const created = await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
-      .send({ senderId: ctx.senderId, categoryId: ctx.categoryId, qtyIn: 7 })
+      .send({ senderId: ctx.senderId, qtyIn: 7 })
       .expect(201);
 
     const updated = await request(app)
@@ -128,7 +120,6 @@ describe("/lots", () => {
       .set(...authHeader(ctx.token))
       .send({
         senderId: ctx.senderId,
-        categoryId: ctx.categoryId,
         label: "Sonbahar montları",
         qtyIn: 12,
         unitPrice: { amount: 1500, currency: "USD" },
@@ -142,7 +133,7 @@ describe("/lots", () => {
     const res = await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
-      .send({ senderId: ctx.senderId, categoryId: ctx.categoryId, qtyIn: 3 })
+      .send({ senderId: ctx.senderId, qtyIn: 3 })
       .expect(201);
     expect(res.body.label).toBe("");
     expect(res.body.unitPrice).toBeNull();
@@ -152,10 +143,9 @@ describe("/lots", () => {
     const created = await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
-      .send({ senderId: ctx.senderId, categoryId: ctx.categoryId, qtyIn: 4 })
+      .send({ senderId: ctx.senderId, qtyIn: 4 })
       .expect(201);
 
-    // operator forbidden
     await request(app)
       .delete(apiPath(`/lots/${created.body.id}`))
       .set(...authHeader(ctx.token))
@@ -169,37 +159,14 @@ describe("/lots", () => {
   });
 });
 
-describe("/lots/stock/*", () => {
-  it("by-category aggregates available stock", async () => {
+describe("/lots/stock/by-sender", () => {
+  it("aggregates available stock per sender", async () => {
     const ctx2 = await seed("operator");
     const auth = authHeader(ctx2.token);
     await request(app)
       .post(apiPath("/lots"))
       .set(...auth)
-      .send({ senderId: ctx2.senderId, categoryId: ctx2.categoryId, qtyIn: 12 })
-      .expect(201);
-    await request(app)
-      .post(apiPath("/lots"))
-      .set(...auth)
-      .send({ senderId: ctx2.senderId, categoryId: ctx2.categoryId, qtyIn: 8 })
-      .expect(201);
-
-    const res = await request(app)
-      .get(apiPath("/lots/stock/by-category"))
-      .set(...auth)
-      .expect(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].totalAvailable).toBe(20);
-    expect(res.body[0].lots).toBe(2);
-  });
-
-  it("by-sender aggregates per sender", async () => {
-    const ctx2 = await seed("operator");
-    const auth = authHeader(ctx2.token);
-    await request(app)
-      .post(apiPath("/lots"))
-      .set(...auth)
-      .send({ senderId: ctx2.senderId, categoryId: ctx2.categoryId, qtyIn: 5 })
+      .send({ senderId: ctx2.senderId, qtyIn: 5 })
       .expect(201);
 
     const res = await request(app)
@@ -212,6 +179,128 @@ describe("/lots/stock/*", () => {
   });
 });
 
+describe("/lots/:id/photos", () => {
+  let ctx: SeedResult;
+  let lotId: string;
+  let tinyJpeg: Buffer;
+
+  beforeEach(async () => {
+    ctx = await seed("operator");
+    fakeStore.clear();
+    const lot = await request(app)
+      .post(apiPath("/lots"))
+      .set(...authHeader(ctx.token))
+      .send({ senderId: ctx.senderId, qtyIn: 5 })
+      .expect(201);
+    lotId = lot.body.id;
+    // Real 10×10 JPEG so file-type magic-byte detection passes.
+    tinyJpeg = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: { r: 200, g: 50, b: 50 } },
+    })
+      .jpeg()
+      .toBuffer();
+  });
+
+  it("uploads JPEGs and pushes photos with stable ids", async () => {
+    const res = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .attach("photos", tinyJpeg, { filename: "b.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    expect(res.body.photos).toHaveLength(2);
+    for (const p of res.body.photos) {
+      expect(p.id).toMatch(/^[0-9a-f]{24}$/);
+      expect(p.mimeType).toBe("image/jpeg");
+      expect(p.storageKey).toContain(`lots/${lotId}/photos/${p.id}.jpg`);
+      expect(fakeStore.has(p.storageKey)).toBe(true);
+    }
+  });
+
+  it("rejects non-image declared mime at multer", async () => {
+    await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", Buffer.from("hello"), {
+        filename: "x.txt",
+        contentType: "text/plain",
+      })
+      .expect(415);
+  });
+
+  it("rejects image-mime liar via magic-byte check", async () => {
+    const res = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", Buffer.from("not really a jpeg"), {
+        filename: "fake.jpg",
+        contentType: "image/jpeg",
+      })
+      .expect(422);
+    expect(res.body.code).toBe("VALIDATION");
+  });
+
+  it("rejects exceeding LOT_PHOTO_MAX_COUNT", async () => {
+    // Fill to the limit (10) in one shot.
+    const firstReq = request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token));
+    for (let i = 0; i < 10; i += 1) {
+      firstReq.attach("photos", tinyJpeg, { filename: `p${i}.jpg`, contentType: "image/jpeg" });
+    }
+    const first = await firstReq.expect(201);
+    expect(first.body.photos).toHaveLength(10);
+
+    // One more should 409.
+    await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "extra.jpg", contentType: "image/jpeg" })
+      .expect(409);
+  });
+
+  it("GET returns a presigned URL with TTL metadata", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    const photoId = upload.body.photos[0].id;
+
+    const res = await request(app)
+      .get(apiPath(`/lots/${lotId}/photos/${photoId}`))
+      .set(...authHeader(ctx.token))
+      .expect(200);
+    expect(res.body.url).toMatch(/^https:\/\/mock-s3\.local\//);
+    expect(typeof res.body.expiresAt).toBe("string");
+    expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("DELETE: admin removes, operator forbidden", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    const photoId = upload.body.photos[0].id;
+    const storageKey = upload.body.photos[0].storageKey;
+    expect(fakeStore.has(storageKey)).toBe(true);
+
+    await request(app)
+      .delete(apiPath(`/lots/${lotId}/photos/${photoId}`))
+      .set(...authHeader(ctx.token))
+      .expect(403);
+
+    const admin = await loginAs("admin");
+    const res = await request(app)
+      .delete(apiPath(`/lots/${lotId}/photos/${photoId}`))
+      .set(...authHeader(admin.accessToken))
+      .expect(200);
+    expect(res.body.photos).toHaveLength(0);
+    expect(fakeStore.has(storageKey)).toBe(false);
+  });
+});
+
 describe("/lots/:id/receipt.pdf", () => {
   it("returns a PDF stream", async () => {
     const ctx2 = await seed("operator");
@@ -219,7 +308,7 @@ describe("/lots/:id/receipt.pdf", () => {
     const lot = await request(app)
       .post(apiPath("/lots"))
       .set(...auth)
-      .send({ senderId: ctx2.senderId, categoryId: ctx2.categoryId, qtyIn: 3 })
+      .send({ senderId: ctx2.senderId, qtyIn: 3 })
       .expect(201);
 
     const res = await request(app)
@@ -234,7 +323,6 @@ describe("/lots/:id/receipt.pdf", () => {
       .expect(200);
     expect(res.headers["content-type"]).toContain("application/pdf");
     const body = res.body as Buffer;
-    // PDF files start with %PDF
     expect(body.subarray(0, 4).toString()).toBe("%PDF");
   }, 30_000);
 });

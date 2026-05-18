@@ -2,6 +2,7 @@ import type {
   CreateLotInput,
   InboundLot,
   PaginatedResponse,
+  SignedPhotoUrlResponse,
   UpdateLotInput,
 } from "@sadiyakargo/shared";
 import { API_BASE } from "@/lib/env";
@@ -19,7 +20,6 @@ interface ListParams {
   page?: number;
   limit?: number;
   senderId?: string;
-  categoryId?: string;
   status?: string;
   available?: boolean;
   from?: string;
@@ -39,9 +39,18 @@ export const lotsApi = {
   update: (id: string, input: UpdateLotInput) =>
     request<InboundLot>(`/lots/${id}`, { method: "PATCH", body: input }),
   remove: (id: string) => request<{ ok: true }>(`/lots/${id}`, { method: "DELETE" }),
-  stockByCategory: () => request<StockBreakdownRow[]>("/lots/stock/by-category"),
   stockBySender: () => request<StockBreakdownRow[]>("/lots/stock/by-sender"),
   receiptPdfUrl: (id: string) => `${API_BASE}/lots/${id}/receipt.pdf`,
+
+  uploadPhotos: (lotId: string, files: File[]) => {
+    const form = new FormData();
+    for (const f of files) form.append("photos", f);
+    return request<InboundLot>(`/lots/${lotId}/photos`, { method: "POST", body: form });
+  },
+  getPhotoSignedUrl: (lotId: string, photoId: string) =>
+    request<SignedPhotoUrlResponse>(`/lots/${lotId}/photos/${photoId}`),
+  removePhoto: (lotId: string, photoId: string) =>
+    request<InboundLot>(`/lots/${lotId}/photos/${photoId}`, { method: "DELETE" }),
 };
 
 /** Download the receipt PDF using the current access token. Toast on failure

@@ -3,7 +3,6 @@ import { moneySchema, objectIdSchema } from "./common.js";
 
 export const createLotSchema = z.object({
   senderId: objectIdSchema,
-  categoryId: objectIdSchema,
   label: z.string().trim().max(120).optional(),
   qtyIn: z.coerce.number().int().positive(),
   unitPrice: moneySchema.nullable().optional(),

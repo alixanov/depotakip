@@ -8,7 +8,6 @@ import { env } from "../../config/env.js";
 import { tenantFilter } from "../../lib/repository.js";
 import { InboundLot } from "./lot.model.js";
 import { Sender } from "../senders/sender.model.js";
-import { Category } from "../categories/category.model.js";
 
 type IdParams = { id: string };
 
@@ -20,10 +19,7 @@ export const receiptPdf = asyncHandler<IdParams>(async (req, res) => {
   );
   if (!lot) throw notFound("Parti bulunamadı");
 
-  const [sender, category] = await Promise.all([
-    Sender.findById(lot.senderId),
-    Category.findById(lot.categoryId),
-  ]);
+  const sender = await Sender.findById(lot.senderId);
 
   const qr = await qrDataUrl(`${env.WEB_BASE_URL}/depo/lots/${lot._id.toString()}`, 240);
 
@@ -40,9 +36,6 @@ export const receiptPdf = asyncHandler<IdParams>(async (req, res) => {
     sender: {
       fullName: sender?.fullName || "—",
       phone: sender?.phone || "—",
-    },
-    category: {
-      name: category?.name || "—",
     },
     org: { name: "Depo Yönetim" },
   });

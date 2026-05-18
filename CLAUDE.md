@@ -8,7 +8,7 @@ Guidance for Claude Code when working in this repository.
 specification (v2.1, dated 2026-05-17). If the spec and this file disagree, the spec wins.
 
 Domain identifiers stay Turkish (`sender/gönderici`, `carrier/kargocu`, `recipient/alıcı`,
-`shipment/gönderi`, `lot`, `kategori`). Do not translate UI strings or field names.
+`shipment/gönderi`, `lot`). Do not translate UI strings or field names.
 
 ## Monorepo layout
 
@@ -52,7 +52,7 @@ resolution (Vite for web, tsx/tsup for api).
 
 - `src/constants.ts` — `STATUSES` (incl. `bekliyor`), `STATUS_LABELS`, `CURRENCIES`, `ROLES`,
   `TRANSACTION_KINDS`, `PAYMENT_METHODS`, `LOT_STATUSES`, `NOTIFICATION_*`, `DEFAULT_CATEGORIES`.
-- `src/schemas/` — one file per domain (auth, user, sender, carrier, category, lot, shipment,
+- `src/schemas/` — one file per domain (auth, user, sender, carrier, lot, shipment,
   transaction, exchangeRate, notification, common). Each file exports both the zod schema
   _and_ the `z.infer<...>` type.
 - `src/types.ts` — denormalised domain types (`User`, `Sender`, `Carrier`, `InboundLot`,
@@ -90,7 +90,7 @@ apps/api/src/
 │   ├── health/                – /api/v1/health  (added in Etap 0)
 │   ├── auth/                  – Etap 1
 │   ├── users/                 – Etap 1
-│   ├── senders/, carriers/, categories/   – Etap 2
+│   ├── senders/, carriers/   – Etap 2
 │   ├── lots/                  – Etap 3
 │   ├── shipments/             – Etap 4
 │   ├── transactions/, balances/, exchangeRates/   – Etap 5

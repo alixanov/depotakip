@@ -16,9 +16,6 @@ export interface ReceiptDocumentProps {
     fullName: string;
     phone: string;
   };
-  category: {
-    name: string;
-  };
   org: {
     name: string;
   };
@@ -30,7 +27,7 @@ function formatMoney(m: { amount: number; currency: string }): string {
   return `${display} ${m.currency}`;
 }
 
-export function ReceiptDocument({ qrDataUrl, lot, sender, category, org }: ReceiptDocumentProps) {
+export function ReceiptDocument({ qrDataUrl, lot, sender, org }: ReceiptDocumentProps) {
   return (
     <Document title={`Receipt-${lot.id}`} author={org.name}>
       <Page size="A5" style={styles.page}>
@@ -65,10 +62,6 @@ export function ReceiptDocument({ qrDataUrl, lot, sender, category, org }: Recei
               <Text style={styles.value}>{lot.label}</Text>
             </View>
           )}
-          <View style={styles.row}>
-            <Text style={styles.label}>Kategori</Text>
-            <Text style={styles.value}>{category.name}</Text>
-          </View>
           <View style={styles.row}>
             <Text style={styles.label}>Adet</Text>
             <Text style={styles.value}>{lot.qtyIn}</Text>

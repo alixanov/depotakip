@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { randomBytes } from "node:crypto";
 import { Types } from "mongoose";
 import { app, apiPath, authHeader, loginAs, ORG_ID, request } from "./helpers.ts";
 import { NotificationTemplate } from "../src/modules/notifications/template.model.ts";
@@ -16,9 +15,7 @@ interface Seed {
 
 async function seedWithTemplates(): Promise<Seed> {
   const op = await loginAs("operator");
-  const admin = await loginAs("admin");
   const authOp = authHeader(op.accessToken);
-  const authAdmin = authHeader(admin.accessToken);
 
   const sender = await request(app)
     .post(apiPath("/senders"))
@@ -34,16 +31,10 @@ async function seedWithTemplates(): Promise<Seed> {
     .expect(201);
   await Carrier.updateOne({ _id: carrier.body.id }, { $set: { telegramChatId: 222 } });
 
-  const category = await request(app)
-    .post(apiPath("/categories"))
-    .set(...authAdmin)
-    .send({ name: `Cat-${randomBytes(3).toString("hex")}` })
-    .expect(201);
-
   const lot = await request(app)
     .post(apiPath("/lots"))
     .set(...authOp)
-    .send({ senderId: sender.body.id, categoryId: category.body.id, qtyIn: 10 })
+    .send({ senderId: sender.body.id, qtyIn: 10 })
     .expect(201);
 
   // Seed all templates we trigger in tests (migration only seeds them once per

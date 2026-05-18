@@ -37,7 +37,7 @@ const TEMPLATES = [
     key: "lot_received",
     channel: "telegram",
     language: "tr",
-    body: "{{qty}} adet {{category}} depomuza teslim alındı.",
+    body: "{{qty}} adet {{label}} depomuza teslim alındı.",
   },
 ];
 

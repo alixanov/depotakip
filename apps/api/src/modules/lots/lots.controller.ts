@@ -15,7 +15,6 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
       limit: q.limit ? Number(q.limit) : undefined,
       sort: q.sort,
       senderId: q.senderId,
-      categoryId: q.categoryId,
       status: q.status,
       from: q.from,
       to: q.to,
@@ -45,12 +44,25 @@ export const remove = asyncHandler<IdParams>(async (req, res) => {
   res.json({ ok: true });
 });
 
-export const stockByCategory = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.orgId) throw unauthorized();
-  res.json(await service.stockByCategory(req.orgId));
-});
-
 export const stockBySender = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.stockBySender(req.orgId));
+});
+
+type PhotoParams = { id: string; photoId: string };
+
+export const addPhotos = asyncHandler<IdParams>(async (req, res) => {
+  if (!req.orgId) throw unauthorized();
+  const files = (req.files ?? []) as Express.Multer.File[];
+  res.status(201).json(await service.addPhotos(req.orgId, req.params.id, files));
+});
+
+export const getPhotoUrl = asyncHandler<PhotoParams>(async (req, res) => {
+  if (!req.orgId) throw unauthorized();
+  res.json(await service.getPhotoUrl(req.orgId, req.params.id, req.params.photoId));
+});
+
+export const removePhoto = asyncHandler<PhotoParams>(async (req, res) => {
+  if (!req.orgId) throw unauthorized();
+  res.json(await service.removePhoto(req.orgId, req.params.id, req.params.photoId));
 });

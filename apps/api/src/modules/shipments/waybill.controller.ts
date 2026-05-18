@@ -9,7 +9,6 @@ import { tenantFilter } from "../../lib/repository.js";
 import { Shipment } from "./shipment.model.js";
 import { Carrier } from "../carriers/carrier.model.js";
 import { InboundLot } from "../lots/lot.model.js";
-import { Category } from "../categories/category.model.js";
 
 type IdParams = { id: string };
 
@@ -23,18 +22,14 @@ export const waybillPdf = asyncHandler<IdParams>(async (req, res) => {
 
   const carrier = await Carrier.findById(shipment.carrierId);
 
-  // Resolve category name per item via the originating lot.
+  // Resolve the human label per item via the originating lot.
   const lotIds = shipment.items.map((it) => it.lotId);
   const lots = await InboundLot.find({ _id: { $in: lotIds } });
   const lotById = new Map(lots.map((l) => [l._id.toString(), l]));
-  const catIds = Array.from(new Set(lots.map((l) => l.categoryId.toString())));
-  const cats = await Category.find({ _id: { $in: catIds } });
-  const catById = new Map(cats.map((c) => [c._id.toString(), c.name]));
 
   const items = shipment.items.map((it) => {
     const lot = lotById.get(it.lotId.toString());
-    const categoryName = lot ? catById.get(lot.categoryId.toString()) || "—" : "—";
-    return { categoryName, qty: it.qty };
+    return { label: lot?.label || "—", qty: it.qty };
   });
   const totalItems = items.reduce((s, it) => s + it.qty, 0);
 

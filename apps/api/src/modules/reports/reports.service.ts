@@ -272,55 +272,6 @@ export async function senders(orgId: string, range: DateRange = {}): Promise<Sen
     .sort((a, b) => b.balanceUsd - a.balanceUsd);
 }
 
-export interface CategoryReportRow {
-  categoryId: string;
-  name: string;
-  lots: number;
-  qtyIn: number;
-  qtyAvailable: number;
-}
-
-export async function categories(
-  orgId: string,
-  range: DateRange = {}
-): Promise<CategoryReportRow[]> {
-  const rows = await InboundLot.aggregate<{
-    _id: Types.ObjectId;
-    lots: number;
-    qtyIn: number;
-    qtyAvailable: number;
-    name?: string;
-  }>([
-    { $match: { ...tenant(orgId), ...rangeFilter(range, "receivedAt") } },
-    {
-      $group: {
-        _id: "$categoryId",
-        lots: { $sum: 1 },
-        qtyIn: { $sum: "$qtyIn" },
-        qtyAvailable: { $sum: "$qtyAvailable" },
-      },
-    },
-    { $lookup: { from: "categories", localField: "_id", foreignField: "_id", as: "cat" } },
-    {
-      $project: {
-        _id: 1,
-        lots: 1,
-        qtyIn: 1,
-        qtyAvailable: 1,
-        name: { $arrayElemAt: ["$cat.name", 0] },
-      },
-    },
-    { $sort: { qtyIn: -1 } },
-  ]);
-  return rows.map((r) => ({
-    categoryId: r._id.toString(),
-    name: r.name || "—",
-    lots: r.lots,
-    qtyIn: r.qtyIn,
-    qtyAvailable: r.qtyAvailable,
-  }));
-}
-
 export interface FinanceReportRow {
   date: string;
   carrierChargesUsd: number;

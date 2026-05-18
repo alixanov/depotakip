@@ -19,7 +19,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   admin: "nav:manage",
   senders: "nav:senders",
   carriers: "nav:carriers",
-  categories: "nav:categories",
   "exchange-rates": "nav:rates",
   users: "nav:users",
   notifications: "nav:notifications",

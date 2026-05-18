@@ -58,12 +58,6 @@ const REPORT_COLUMN_DEFS: Record<ReportType, { key: string; header: string }[]> 
     { key: "paymentsUsd", header: "Ödeme" },
     { key: "balanceUsd", header: "Bakiye" },
   ],
-  categories: [
-    { key: "name", header: "Kategori" },
-    { key: "lots", header: "Parti" },
-    { key: "qtyIn", header: "Geldi" },
-    { key: "qtyAvailable", header: "Stoğa" },
-  ],
   finance: [
     { key: "date", header: "Tarih" },
     { key: "carrierChargesUsd", header: "Kargocu borç" },
@@ -73,13 +67,10 @@ const REPORT_COLUMN_DEFS: Record<ReportType, { key: string; header: string }[]> 
   ],
 };
 
-type Tab = "dashboard" | "carriers" | "senders" | "categories" | "finance";
+type Tab = "dashboard" | "carriers" | "senders" | "finance";
 
 const raporSearchSchema = z.object({
-  tab: z
-    .enum(["dashboard", "carriers", "senders", "categories", "finance"])
-    .optional()
-    .catch(undefined),
+  tab: z.enum(["dashboard", "carriers", "senders", "finance"]).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/raporlar")({
@@ -113,7 +104,6 @@ function ReportsPage() {
         <TabsTrigger value="dashboard">{t("raporlar:tab_dashboard")}</TabsTrigger>
         <TabsTrigger value="carriers">{t("raporlar:tab_carriers")}</TabsTrigger>
         <TabsTrigger value="senders">{t("raporlar:tab_senders")}</TabsTrigger>
-        <TabsTrigger value="categories">{t("raporlar:tab_categories")}</TabsTrigger>
         <TabsTrigger value="finance">{t("raporlar:tab_finance")}</TabsTrigger>
       </TabsList>
       <TabsContent value="dashboard">
@@ -124,9 +114,6 @@ function ReportsPage() {
       </TabsContent>
       <TabsContent value="senders">
         <TabularReport type="senders" />
-      </TabsContent>
-      <TabsContent value="categories">
-        <TabularReport type="categories" />
       </TabsContent>
       <TabsContent value="finance">
         <TabularReport type="finance" />
@@ -366,7 +353,7 @@ function TabularReport({ type }: { type: ReportType }) {
             data={query.data}
             loading={query.isLoading}
             error={query.error as Error | null}
-            rowKey={(r) => String((r.carrierId || r.senderId || r.categoryId || r.date) as string)}
+            rowKey={(r) => String((r.carrierId || r.senderId || r.date) as string)}
             empty={t("raporlar:empty_table")}
           />
         </CardContent>

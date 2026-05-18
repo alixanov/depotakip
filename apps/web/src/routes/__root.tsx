@@ -13,7 +13,6 @@ import {
   Package,
   ScrollText,
   ShieldCheck,
-  Tag,
   Truck,
   Users as UsersIcon,
   UserCircle,
@@ -166,7 +165,7 @@ function AppLayout() {
                 {t("nav:reports")}
               </TopNavLink>
 
-              {/* Overflow drop-down: senders/carriers (operator+) + categories/users/rates/notifications/audit (admin) */}
+              {/* Overflow drop-down: senders/carriers (operator+) + rates/users/notifications/audit (admin) */}
               {user.role !== "viewer" && <AdminMenu role={user.role} />}
             </nav>
           )}
@@ -290,11 +289,6 @@ function AdminMenu({ role }: { role: string }) {
         {isAdmin && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/admin/categories" className="cursor-pointer">
-                <Tag className="h-4 w-4" /> {t("nav:categories")}
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link to="/admin/exchange-rates" className="cursor-pointer">
                 <Coins className="h-4 w-4" /> {t("nav:rates")}

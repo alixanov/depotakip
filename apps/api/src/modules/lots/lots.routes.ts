@@ -1,6 +1,12 @@
 import { Router } from "express";
-import { createLotSchema, idParamSchema, updateLotSchema } from "@sadiyakargo/shared";
+import {
+  createLotSchema,
+  idParamSchema,
+  lotPhotoIdParamSchema,
+  updateLotSchema,
+} from "@sadiyakargo/shared";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { lotPhotoUpload } from "../../middleware/upload.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./lots.controller.js";
 import { receiptPdf } from "./receipt.controller.js";
@@ -9,7 +15,6 @@ const router = Router();
 router.use(requireAuth);
 
 // Static (non-:id) sub-paths first.
-router.get("/stock/by-category", controller.stockByCategory);
 router.get("/stock/by-sender", controller.stockBySender);
 
 // PDF receipt — placed before /:id so it doesn't collide with the wildcard.
@@ -31,5 +36,25 @@ router.patch(
   controller.update
 );
 router.delete("/:id", requireRole("admin"), validate({ params: idParamSchema }), controller.remove);
+
+// ── Photos ────────────────────────────────────────────────────────────────
+router.post(
+  "/:id/photos",
+  requireRole("admin", "operator"),
+  validate({ params: idParamSchema }),
+  lotPhotoUpload,
+  controller.addPhotos
+);
+router.get(
+  "/:id/photos/:photoId",
+  validate({ params: lotPhotoIdParamSchema }),
+  controller.getPhotoUrl
+);
+router.delete(
+  "/:id/photos/:photoId",
+  requireRole("admin"),
+  validate({ params: lotPhotoIdParamSchema }),
+  controller.removePhoto
+);
 
 export default router;
