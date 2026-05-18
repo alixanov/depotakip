@@ -7,7 +7,6 @@ export interface DashboardKpi {
   shipmentsByStatus: Record<string, number>;
   stockTotal: number;
   carrierBalanceUsd: number;
-  senderBalanceUsd: number;
   shipmentsByDay: { day: string; count: number }[];
   receivedByDay: { day: string; qty: number }[];
 }

@@ -13,7 +13,6 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await service.list(req.orgId, {
       page: q.page ? Number(q.page) : undefined,
       limit: q.limit ? Number(q.limit) : undefined,
-      counterpartyType: q.counterpartyType as "carrier" | "sender" | undefined,
       counterpartyId: q.counterpartyId,
       shipmentId: q.shipmentId,
       kind: q.kind as TransactionKind | undefined,
@@ -39,9 +38,4 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 export const carrierBalances = asyncHandler(async (req: Request, res: Response) => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.carrierBalances(req.orgId));
-});
-
-export const senderBalances = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.orgId) throw unauthorized();
-  res.json(await service.senderBalances(req.orgId));
 });

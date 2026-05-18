@@ -336,9 +336,7 @@ async function main() {
         const avail = localAvail.get(lot.id);
         const qty = rand(1, Math.min(5, avail));
         localAvail.set(lot.id, avail - qty);
-        const senderCharge =
-          Math.random() < 0.75 ? { amount: rand(500, 5000), currency: pick(["USD", "TRY"]) } : null;
-        return { lotId: lot.id, qty, senderCharge };
+        return { lotId: lot.id, qty };
       });
       const carrier = pick(carriers);
       // shipmentDate must be YYYY-MM-DD (zod .date(), not .datetime()).
@@ -437,9 +435,8 @@ async function main() {
     }
     console.log(`       status distribution:`, counts);
 
-    console.log("[8/8] Registering partial payments via API ...");
+    console.log("[8/8] Registering partial carrier payments via API ...");
     const carrierBal = await api("GET", "/transactions/balances/carriers");
-    const senderBal = await api("GET", "/transactions/balances/senders");
     let payCount = 0;
     for (const row of carrierBal) {
       if (row.balanceUsd > 0 && Math.random() < 0.5) {
@@ -463,31 +460,6 @@ async function main() {
           payCount++;
         } catch (e) {
           console.warn(`       ! carrier_payment failed: ${e.message}`);
-        }
-      }
-    }
-    for (const row of senderBal) {
-      if (row.balanceUsd > 0 && Math.random() < 0.5) {
-        const pay = Math.round(row.balanceUsd * (0.5 + Math.random() * 0.4));
-        if (pay <= 0) continue;
-        try {
-          await api(
-            "POST",
-            "/transactions",
-            {
-              kind: "sender_payment",
-              counterparty: { type: "sender", id: row.counterpartyId },
-              amount: pay,
-              currency: "USD",
-              direction: "credit",
-              method: pick(["cash", "bank"]),
-              notes: `${DEMO_TAG} partial settlement`,
-            },
-            { idempotencyKey: randomUUID() }
-          );
-          payCount++;
-        } catch (e) {
-          console.warn(`       ! sender_payment failed: ${e.message}`);
         }
       }
     }

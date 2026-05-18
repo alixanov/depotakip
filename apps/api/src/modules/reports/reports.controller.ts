@@ -35,9 +35,6 @@ const REPORT_DEFS = {
       { key: "name", header: "Gönderici" },
       { key: "lots", header: "Partiler" },
       { key: "qtyIn", header: "Adet" },
-      { key: "chargesUsd", header: "Borç USD-cent" },
-      { key: "paymentsUsd", header: "Ödeme USD-cent" },
-      { key: "balanceUsd", header: "Bakiye USD-cent" },
     ],
   },
   finance: {
@@ -46,8 +43,6 @@ const REPORT_DEFS = {
       { key: "date", header: "Tarih" },
       { key: "carrierChargesUsd", header: "Carrier borç" },
       { key: "carrierPaymentsUsd", header: "Carrier ödeme" },
-      { key: "senderChargesUsd", header: "Sender borç" },
-      { key: "senderPaymentsUsd", header: "Sender ödeme" },
     ],
   },
 } as const;

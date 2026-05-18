@@ -18,7 +18,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore, userCan } from "@/stores/auth";
 import { useLogout } from "@/lib/useLogout";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +38,18 @@ export function MobileBottomNav() {
   const { t } = useTranslation();
   if (!user) return null;
 
-  const canMutate = user.role !== "viewer";
-  const isAdmin = user.role === "admin";
+  // The "Çıkış" tab requires shipment write access. The Manage section covers
+  // counterparty CRUD. The Admin section bundles every admin-only screen — if
+  // the user can manage any of them, show the heading.
+  const canShip = userCan(user, "shipments:write");
+  const canManage = userCan(user, "senders:write") || userCan(user, "carriers:write");
+  const isAdmin =
+    userCan(user, "users:manage") ||
+    userCan(user, "roles:manage") ||
+    userCan(user, "permissions:manage") ||
+    userCan(user, "audit:read") ||
+    userCan(user, "notifications:manage") ||
+    userCan(user, "exchange_rates:manage");
   const close = () => setMenuOpen(false);
 
   return (
@@ -50,7 +60,7 @@ export function MobileBottomNav() {
       >
         <Item to="/" icon={<BarChart3 className="h-5 w-5" />} label={t("nav:homeShort")} />
         <Item to="/depo" icon={<Warehouse className="h-5 w-5" />} label={t("nav:warehouse")} />
-        {canMutate ? (
+        {canShip ? (
           <Item to="/cikis" icon={<Truck className="h-5 w-5" />} label={t("nav:ship")} />
         ) : (
           <Item to="/takip" icon={<Package className="h-5 w-5" />} label={t("nav:track")} />
@@ -89,7 +99,7 @@ export function MobileBottomNav() {
               </DrawerLink>
 
               {/* Operator+ section: counterparty management. */}
-              {canMutate && (
+              {canManage && (
                 <>
                   <DrawerSectionLabel>{t("nav:manage")}</DrawerSectionLabel>
                   <DrawerLink to="/admin/senders" onClose={close} icon={<UsersIcon />}>

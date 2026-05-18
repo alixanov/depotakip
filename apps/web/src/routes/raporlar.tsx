@@ -37,8 +37,6 @@ const USD_KEYS = new Set([
   "balanceUsd",
   "carrierChargesUsd",
   "carrierPaymentsUsd",
-  "senderChargesUsd",
-  "senderPaymentsUsd",
 ]);
 
 const REPORT_COLUMN_DEFS: Record<ReportType, { key: string; header: string }[]> = {
@@ -54,16 +52,11 @@ const REPORT_COLUMN_DEFS: Record<ReportType, { key: string; header: string }[]> 
     { key: "name", header: "Gönderici" },
     { key: "lots", header: "Parti" },
     { key: "qtyIn", header: "Adet" },
-    { key: "chargesUsd", header: "Borç" },
-    { key: "paymentsUsd", header: "Ödeme" },
-    { key: "balanceUsd", header: "Bakiye" },
   ],
   finance: [
     { key: "date", header: "Tarih" },
     { key: "carrierChargesUsd", header: "Kargocu borç" },
     { key: "carrierPaymentsUsd", header: "Kargocu ödeme" },
-    { key: "senderChargesUsd", header: "Gönderici borç" },
-    { key: "senderPaymentsUsd", header: "Gönderici ödeme" },
   ],
 };
 
@@ -141,18 +134,13 @@ function Dashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Kpi label={t("raporlar:kpi_shipments_total")} value={data.shipmentsTotal} />
         <Kpi label={t("raporlar:kpi_stock_total")} value={data.stockTotal} />
         <Kpi
           label={t("raporlar:kpi_carrier_balance")}
           value={formatUsdCents(data.carrierBalanceUsd)}
           tone={data.carrierBalanceUsd > 0 ? "amber" : "emerald"}
-        />
-        <Kpi
-          label={t("raporlar:kpi_sender_balance")}
-          value={formatUsdCents(data.senderBalanceUsd)}
-          tone={data.senderBalanceUsd > 0 ? "amber" : "emerald"}
         />
       </div>
 

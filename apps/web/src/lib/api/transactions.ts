@@ -19,7 +19,6 @@ export interface BalanceRow {
 interface ListParams {
   page?: number;
   limit?: number;
-  counterpartyType?: "carrier" | "sender";
   counterpartyId?: string;
   shipmentId?: string;
   kind?: TransactionKind;
@@ -44,7 +43,6 @@ export const transactionsApi = {
       idempotencyKey,
     }),
   carrierBalances: () => request<BalanceRow[]>("/transactions/balances/carriers"),
-  senderBalances: () => request<BalanceRow[]>("/transactions/balances/senders"),
   receiptPdfUrl: (id: string) => `${API_BASE}/transactions/${id}/receipt.pdf`,
 };
 

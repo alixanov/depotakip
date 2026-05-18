@@ -26,6 +26,11 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [previews, setPreviews] = useState<Preview[]>([]);
+  // HTML5 drag-and-drop reorder state. Touch devices don't fire HTML5 dnd
+  // events — that's a known limitation; touch users can still re-add files in
+  // the desired order.
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   // Re-build object URLs whenever `value` changes; revoke the previous batch
   // so they don't leak memory across renders.
@@ -78,6 +83,14 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
     onChange(value.filter((_, i) => i !== idx));
   };
 
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= value.length || to >= value.length) return;
+    const next = [...value];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
   return (
     <div className="space-y-2">
       <label
@@ -126,12 +139,46 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
           {previews.map((p, idx) => (
             <li
               key={`${p.file.name}-${idx}`}
-              className="group relative aspect-square overflow-hidden rounded-md border bg-muted"
+              draggable={!disabled}
+              onDragStart={(e) => {
+                if (disabled) return;
+                setDraggedIdx(idx);
+                e.dataTransfer.effectAllowed = "move";
+                // Some browsers refuse to start the drag without data set.
+                e.dataTransfer.setData("text/plain", String(idx));
+              }}
+              onDragOver={(e) => {
+                if (disabled || draggedIdx === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (hoverIdx !== idx) setHoverIdx(idx);
+              }}
+              onDragLeave={() => {
+                if (hoverIdx === idx) setHoverIdx(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedIdx !== null) reorder(draggedIdx, idx);
+                setDraggedIdx(null);
+                setHoverIdx(null);
+              }}
+              onDragEnd={() => {
+                setDraggedIdx(null);
+                setHoverIdx(null);
+              }}
+              className={cn(
+                "group relative aspect-square overflow-hidden rounded-md border bg-muted transition-all",
+                !disabled && "cursor-move",
+                draggedIdx === idx && "opacity-40",
+                hoverIdx === idx && draggedIdx !== null && draggedIdx !== idx
+                  ? "ring-2 ring-primary"
+                  : ""
+              )}
             >
               <img
                 src={p.url}
                 alt={p.file.name}
-                className="h-full w-full object-cover"
+                className="pointer-events-none h-full w-full object-cover"
                 draggable={false}
               />
               <Button
@@ -144,12 +191,18 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
               >
                 <X className="h-3 w-3" />
               </Button>
+              <span className="absolute left-1 top-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums">
+                {idx + 1}
+              </span>
               <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/60 to-transparent px-1.5 py-0.5 text-[10px] text-white">
                 {p.file.name}
               </span>
             </li>
           ))}
         </ul>
+      )}
+      {value.length > 1 && (
+        <p className="text-[11px] text-muted-foreground">{t("photo:reorder_hint")}</p>
       )}
       {value.length === 0 && (
         <p className="flex items-center gap-1 text-[11px] text-muted-foreground">

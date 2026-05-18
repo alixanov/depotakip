@@ -20,6 +20,8 @@ async function start(): Promise<void> {
   });
 
   // JWT auth on the socket handshake. Once verified, join the per-org room.
+  // The admin-only room (`audit:read` perm) is for sensitive realtime events
+  // like new audit-log entries that operators shouldn't see live.
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
     if (!token) return next(new Error("token required"));
@@ -27,9 +29,11 @@ async function start(): Promise<void> {
       const payload = verifyAccessToken(token);
       socket.data.userId = payload.sub;
       socket.data.orgId = payload.orgId;
-      socket.data.role = payload.role;
+      socket.data.permissions = payload.permissions;
       socket.join(`org:${payload.orgId}`);
-      if (payload.role === "admin") socket.join(`org:${payload.orgId}:admin`);
+      if (payload.permissions?.includes("audit:read")) {
+        socket.join(`org:${payload.orgId}:admin`);
+      }
       next();
     } catch {
       next(new Error("invalid token"));

@@ -39,7 +39,6 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { downloadPaymentReceipt, transactionsApi } from "@/lib/api/transactions";
 import { carriersApi } from "@/lib/api/carriers";
-import { sendersApi } from "@/lib/api/senders";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requireAuth } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
@@ -50,7 +49,7 @@ import { formatDate, formatMoney, formatUsdCents, toMinor } from "@/lib/format";
 const paymentFormSchema = z.object({
   kind: z.enum(TRANSACTION_KINDS),
   counterparty: z.object({
-    type: z.enum(["carrier", "sender"]),
+    type: z.literal("carrier"),
     id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Karşı taraf seçin"),
   }),
   amount: z.coerce.number().positive("Tutar > 0 olmalı"),
@@ -114,24 +113,14 @@ function BalancesTab() {
     queryKey: ["balances", "carriers"],
     queryFn: transactionsApi.carrierBalances,
   });
-  const sendersQuery = useQuery({
-    queryKey: ["balances", "senders"],
-    queryFn: transactionsApi.senderBalances,
-  });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4">
       <BalanceCard
         title={t("finans:balances_carriers")}
         rows={carriersQuery.data}
         loading={carriersQuery.isLoading}
         error={carriersQuery.error as Error | null}
-      />
-      <BalanceCard
-        title={t("finans:balances_senders")}
-        rows={sendersQuery.data}
-        loading={sendersQuery.isLoading}
-        error={sendersQuery.error as Error | null}
       />
     </div>
   );
@@ -359,10 +348,6 @@ function PaymentDialog({ open, onClose }: { open: boolean; onClose: () => void }
     queryKey: ["carriers", "all"],
     queryFn: () => carriersApi.list({ limit: 200 }),
   });
-  const sendersQuery = useQuery({
-    queryKey: ["senders", "all"],
-    queryFn: () => sendersApi.list({ limit: 200 }),
-  });
 
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
@@ -377,10 +362,8 @@ function PaymentDialog({ open, onClose }: { open: boolean; onClose: () => void }
   });
   const handleApiError = useApiFormErrors(form);
 
-  const counterpartyType = form.watch("counterparty.type");
   const kind = form.watch("kind");
-  const inferredDirection: "debit" | "credit" =
-    kind === "carrier_payment" || kind === "sender_payment" ? "credit" : "debit";
+  const inferredDirection: "debit" | "credit" = kind === "carrier_payment" ? "credit" : "debit";
 
   const create = useMutation({
     mutationFn: (data: CreateTransactionInput) => transactionsApi.create(data, idempotencyKey),
@@ -429,65 +412,34 @@ function PaymentDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("finans:dlg_party_type")}</Label>
-              <select
-                {...form.register("counterparty.type")}
-                className="h-11 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="carrier">{t("finans:party_carrier")}</option>
-                <option value="sender">{t("finans:party_sender")}</option>
-              </select>
-            </div>
           </div>
           <div className="space-y-1.5">
             <Label>{t("finans:dlg_party")}</Label>
             <Controller
               name="counterparty.id"
               control={form.control}
-              render={({ field }) =>
-                counterpartyType === "carrier" ? (
-                  <Combobox
-                    options={carriersQuery.data?.data ?? []}
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    getValue={(c) => c.id}
-                    getLabel={(c) => `${c.firstName} ${c.lastName}`}
-                    getSearchKeys={(c) => [c.phone]}
-                    renderOption={(c) => (
-                      <div className="flex min-w-0 items-baseline justify-between gap-2">
-                        <span className="truncate font-medium">
-                          {c.firstName} {c.lastName}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {c.phone}
-                        </span>
-                      </div>
-                    )}
-                    placeholder={t("select")}
-                    aria-invalid={!!form.formState.errors.counterparty?.id}
-                  />
-                ) : (
-                  <Combobox
-                    options={sendersQuery.data?.data ?? []}
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    getValue={(s) => s.id}
-                    getLabel={(s) => s.fullName}
-                    getSearchKeys={(s) => [s.phone]}
-                    renderOption={(s) => (
-                      <div className="flex min-w-0 items-baseline justify-between gap-2">
-                        <span className="truncate font-medium">{s.fullName}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {s.phone}
-                        </span>
-                      </div>
-                    )}
-                    placeholder={t("select")}
-                    aria-invalid={!!form.formState.errors.counterparty?.id}
-                  />
-                )
-              }
+              render={({ field }) => (
+                <Combobox
+                  options={carriersQuery.data?.data ?? []}
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                  getValue={(c) => c.id}
+                  getLabel={(c) => `${c.firstName} ${c.lastName}`}
+                  getSearchKeys={(c) => [c.phone]}
+                  renderOption={(c) => (
+                    <div className="flex min-w-0 items-baseline justify-between gap-2">
+                      <span className="truncate font-medium">
+                        {c.firstName} {c.lastName}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {c.phone}
+                      </span>
+                    </div>
+                  )}
+                  placeholder={t("select")}
+                  aria-invalid={!!form.formState.errors.counterparty?.id}
+                />
+              )}
             />
             <FieldError>{form.formState.errors.counterparty?.id?.message}</FieldError>
           </div>

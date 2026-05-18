@@ -6,7 +6,7 @@ export interface TransactionDoc extends Document {
   orgId: Types.ObjectId;
   kind: TransactionKind;
   counterparty: {
-    type: "carrier" | "sender";
+    type: "carrier";
     id: Types.ObjectId;
   };
   shipmentId: Types.ObjectId | null;
@@ -24,7 +24,7 @@ export interface TransactionDoc extends Document {
   toClient(): {
     id: string;
     kind: TransactionKind;
-    counterparty: { type: "carrier" | "sender"; id: string };
+    counterparty: { type: "carrier"; id: string };
     shipmentId: string | null;
     amount: number;
     currency: Currency;
@@ -45,10 +45,10 @@ const transactionSchema = new Schema<TransactionDoc>(
     kind: {
       type: String,
       required: true,
-      enum: ["carrier_charge", "carrier_payment", "sender_charge", "sender_payment", "adjustment"],
+      enum: ["carrier_charge", "carrier_payment", "adjustment"],
     },
     counterparty: {
-      type: { type: String, required: true, enum: ["carrier", "sender"] },
+      type: { type: String, required: true, enum: ["carrier"] },
       id: { type: Schema.Types.ObjectId, required: true },
     },
     shipmentId: { type: Schema.Types.ObjectId, ref: "Shipment", default: null },

@@ -1,28 +1,18 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { createSenderSchema, type CreateSenderInput, type Sender } from "@sadiyakargo/shared";
+import { type Sender } from "@sadiyakargo/shared";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable, PaginationBar, type Column } from "@/components/ui/data-table";
-import { FieldError, FormError } from "@/components/ui/form-error";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Users } from "lucide-react";
+import { SenderFormDialog } from "@/components/SenderFormDialog";
 import { sendersApi } from "@/lib/api/senders";
-import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requireRole } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
@@ -34,7 +24,7 @@ export const Route = createFileRoute("/admin/senders")({
 });
 
 function SendersPage() {
-  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = useAuthStore((s) => !!s.user?.role.permissions.includes("senders:delete"));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -78,7 +68,7 @@ function SendersPage() {
       key: "actions",
       header: "",
       cell: (s) =>
-        role === "admin" ? (
+        canDelete ? (
           <Button
             variant="ghost"
             size="icon"
@@ -138,7 +128,7 @@ function SendersPage() {
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.address}</p>
                   )}
                 </div>
-                {role === "admin" && (
+                {canDelete && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -167,7 +157,7 @@ function SendersPage() {
         </CardContent>
       </Card>
 
-      <CreateSenderDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SenderFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       <ConfirmDialog
         open={!!confirmId}
@@ -183,76 +173,5 @@ function SendersPage() {
         }}
       />
     </div>
-  );
-}
-
-function CreateSenderDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const qc = useQueryClient();
-  const [serverError, setServerError] = useState("");
-  const { t } = useTranslation();
-  const form = useForm<CreateSenderInput>({
-    resolver: zodResolver(createSenderSchema),
-    defaultValues: { fullName: "", phone: "", address: "", notes: "", isSelf: false },
-  });
-  const handleApiError = useApiFormErrors(form);
-
-  const create = useMutation({
-    mutationFn: (data: CreateSenderInput) => sendersApi.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["senders"] });
-      onOpenChange(false);
-      form.reset();
-    },
-    onError: (err) => setServerError(handleApiError(err)),
-  });
-
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("admin:btn_new_sender")}</ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <form
-          onSubmit={form.handleSubmit((d) => {
-            setServerError("");
-            create.mutate(d);
-          })}
-          className="space-y-3"
-        >
-          <FormError>{serverError}</FormError>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_name")}</Label>
-            <Input {...form.register("fullName")} autoFocus autoComplete="name" />
-            <FieldError>{form.formState.errors.fullName?.message}</FieldError>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_phone")}</Label>
-            <Input {...form.register("phone")} placeholder="+998..." autoComplete="tel" />
-            <FieldError>{form.formState.errors.phone?.message}</FieldError>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_address")}</Label>
-            <Input {...form.register("address")} autoComplete="street-address" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_notes")}</Label>
-            <Input {...form.register("notes")} />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...form.register("isSelf")} />
-            {t("admin:isSelf_label")}
-          </label>
-          <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
-            {t("create")}
-          </Button>
-        </form>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
   );
 }

@@ -7,7 +7,8 @@ import { parseDuration } from "../../lib/duration.js";
 import { env } from "../../config/env.js";
 import { sendMail } from "../../lib/mailer.js";
 import { logger } from "../../lib/logger.js";
-import { User, type UserDoc } from "./user.model.js";
+import { Role } from "../access/role.model.js";
+import { User, type UserDoc, loadRoleRef } from "./user.model.js";
 import { RefreshToken } from "./refreshToken.model.js";
 import { PasswordResetToken } from "./passwordResetToken.model.js";
 
@@ -51,13 +52,19 @@ async function issueTokens(user: UserDoc, opts: IssueOptions): Promise<IssuedTok
     );
   }
 
+  // Snapshot permissions at issue time. Access tokens are short-lived (15m)
+  // and /auth/refresh re-reads the role on rotation, so permission changes
+  // propagate within one token cycle without invalidating active sessions.
+  const role = await loadRoleRef(user.roleId);
+
   const accessToken = signAccessToken({
     sub: user._id.toString(),
-    role: user.role,
     orgId: user.orgId.toString(),
+    roleId: role.id,
+    permissions: role.permissions,
   });
 
-  return { accessToken, refreshToken, user: user.toSafeJSON() };
+  return { accessToken, refreshToken, user: user.toSafeJSON(role) };
 }
 
 export async function login(
@@ -123,7 +130,8 @@ export async function logout(refreshTokenJwt: string | undefined): Promise<void>
 export async function me(userId: string) {
   const user = await User.findOne({ _id: userId, deletedAt: null });
   if (!user) throw notFound("Kullanıcı bulunamadı");
-  return user.toSafeJSON();
+  const role = await loadRoleRef(user.roleId);
+  return user.toSafeJSON(role);
 }
 
 export async function forgotPassword(email: string): Promise<void> {
@@ -201,14 +209,20 @@ export async function ensureAdmin(args: {
 }): Promise<UserDoc> {
   const existing = await User.findOne({ email: args.email.toLowerCase() });
   if (existing) return existing;
+  const orgId = new Types.ObjectId(args.orgId);
+  const adminRole = await Role.findOne({ orgId, name: "admin", isSystem: true });
+  if (!adminRole) {
+    // RBAC migration hasn't run yet — caller should retry after migrations.
+    throw new Error("System admin role missing — run npm run migrate:up first");
+  }
   const passwordHash = await hash(args.password);
   try {
     return await User.create({
-      orgId: new Types.ObjectId(args.orgId),
+      orgId,
       email: args.email,
       passwordHash,
       fullName: args.fullName,
-      role: "admin",
+      roleId: adminRole._id,
       active: true,
       mustChangePassword: false,
     });

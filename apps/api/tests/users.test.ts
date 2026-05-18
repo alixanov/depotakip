@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { ORG_ID, app, apiPath, authHeader, createTestUser, loginAs, request } from "./helpers.ts";
+import {
+  ORG_ID,
+  app,
+  apiPath,
+  authHeader,
+  createTestUser,
+  getSystemRoleId,
+  loginAs,
+  request,
+} from "./helpers.ts";
 
 describe("/users RBAC", () => {
   it("allows admin to list users", async () => {
@@ -37,21 +46,24 @@ describe("/users RBAC", () => {
 describe("POST /users", () => {
   it("admin can create a new user", async () => {
     const admin = await loginAs("admin");
+    const operatorRoleId = await getSystemRoleId("operator");
     const res = await request(app)
       .post(apiPath("/users"))
       .set(...authHeader(admin.accessToken))
       .send({
         email: "newby@example.com",
         fullName: "New User",
-        role: "operator",
+        roleId: operatorRoleId,
       })
       .expect(201);
     expect(res.body.user.email).toBe("newby@example.com");
+    expect(res.body.user.role.name).toBe("operator");
     expect(res.body.tempPassword).toEqual(expect.any(String));
   });
 
   it("rejects duplicate emails", async () => {
     const admin = await loginAs("admin");
+    const operatorRoleId = await getSystemRoleId("operator");
     await createTestUser({ email: "dup@example.com" });
     await request(app)
       .post(apiPath("/users"))
@@ -59,12 +71,12 @@ describe("POST /users", () => {
       .send({
         email: "dup@example.com",
         fullName: "Dup",
-        role: "operator",
+        roleId: operatorRoleId,
       })
       .expect(409);
   });
 
-  it("rejects invalid role", async () => {
+  it("rejects invalid roleId", async () => {
     const admin = await loginAs("admin");
     await request(app)
       .post(apiPath("/users"))
@@ -72,22 +84,23 @@ describe("POST /users", () => {
       .send({
         email: "bad@example.com",
         fullName: "Bad",
-        role: "superadmin",
+        roleId: "ffffffffffffffffffffffff",
       })
-      .expect(422);
+      .expect(400);
   });
 });
 
 describe("PATCH /users/:id", () => {
   it("admin can change role + active flag", async () => {
     const admin = await loginAs("admin");
+    const viewerRoleId = await getSystemRoleId("viewer");
     const { user } = await createTestUser({ role: "operator" });
     const res = await request(app)
       .patch(apiPath(`/users/${user._id.toString()}`))
       .set(...authHeader(admin.accessToken))
-      .send({ role: "viewer", active: false })
+      .send({ roleId: viewerRoleId, active: false })
       .expect(200);
-    expect(res.body.role).toBe("viewer");
+    expect(res.body.role.name).toBe("viewer");
     expect(res.body.active).toBe(false);
   });
 });
@@ -117,9 +130,21 @@ describe("DELETE /users/:id", () => {
 
   it("data is scoped by org — cannot see other org's users", async () => {
     const admin = await loginAs("admin");
-    // Create user in another org
-    const otherOrgId = new (await import("mongoose")).Types.ObjectId();
-    const { user: foreign } = await createTestUser({ orgId: otherOrgId });
+    // Create user in another org — needs a role in that org too, so seed it
+    // by hand (the global setup only seeds the default org).
+    const { Types } = await import("mongoose");
+    const { Role } = await import("../src/modules/access/role.model.ts");
+    const otherOrgId = new Types.ObjectId();
+    const foreignRole = await Role.create({
+      orgId: otherOrgId,
+      name: "operator",
+      permissions: [],
+      isSystem: true,
+    });
+    const { user: foreign } = await createTestUser({
+      orgId: otherOrgId,
+      roleId: foreignRole._id,
+    });
     await request(app)
       .get(apiPath(`/users/${foreign._id.toString()}`))
       .set(...authHeader(admin.accessToken))
@@ -156,6 +181,6 @@ describe("POST /auth/change-password", () => {
       .send({ email: user.email, password: "BrandNewPass!" })
       .expect(200);
 
-    expect(session.user.role).toBe("operator");
+    expect(session.user.role.name).toBe("operator");
   });
 });

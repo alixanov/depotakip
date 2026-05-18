@@ -1,10 +1,13 @@
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../config/env.js";
 
-interface AccessPayload {
+export interface AccessPayload {
   sub: string;
-  role: string;
   orgId: string;
+  /** Role id — for audit/logging. The actual auth check happens via permissions. */
+  roleId: string;
+  /** Flat permission keys snapshot taken at issue time. Refreshed on /auth/refresh. */
+  permissions: string[];
 }
 
 interface RefreshPayload {

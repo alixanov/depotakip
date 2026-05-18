@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import sharp from "sharp";
 import { app, apiPath, authHeader, loginAs, request } from "./helpers.ts";
-import type { Role } from "@sadiyakargo/shared";
+import type { SystemRoleName } from "@sadiyakargo/shared";
 
 // In-memory replacement for src/lib/storage.ts. Lets us assert puts/deletes
 // happen without touching MinIO/S3. Defined via vi.hoisted so the same Map
@@ -27,7 +27,7 @@ interface SeedResult {
   senderId: string;
 }
 
-async function seed(role: Role = "operator"): Promise<SeedResult> {
+async function seed(role: SystemRoleName = "operator"): Promise<SeedResult> {
   const session = await loginAs(role);
   const auth = authHeader(session.accessToken);
 
@@ -274,6 +274,61 @@ describe("/lots/:id/photos", () => {
     expect(res.body.url).toMatch(/^https:\/\/mock-s3\.local\//);
     expect(typeof res.body.expiresAt).toBe("string");
     expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("PATCH /photos/order: reorders by the provided id list", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .attach("photos", tinyJpeg, { filename: "b.jpg", contentType: "image/jpeg" })
+      .attach("photos", tinyJpeg, { filename: "c.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    const ids = upload.body.photos.map((p: { id: string }) => p.id) as string[];
+    const reversed = [...ids].reverse();
+
+    const res = await request(app)
+      .patch(apiPath(`/lots/${lotId}/photos/order`))
+      .set(...authHeader(ctx.token))
+      .send({ photoIds: reversed })
+      .expect(200);
+    expect(res.body.photos.map((p: { id: string }) => p.id)).toEqual(reversed);
+  });
+
+  it("PATCH /photos/order: rejects mismatched length", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .attach("photos", tinyJpeg, { filename: "b.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    const [first] = upload.body.photos as { id: string }[];
+
+    await request(app)
+      .patch(apiPath(`/lots/${lotId}/photos/order`))
+      .set(...authHeader(ctx.token))
+      .send({ photoIds: [first.id] })
+      .expect(400);
+  });
+
+  it("PATCH /photos/order: rejects unknown id", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .expect(201);
+
+    await request(app)
+      .patch(apiPath(`/lots/${lotId}/photos/order`))
+      .set(...authHeader(ctx.token))
+      .send({ photoIds: ["ffffffffffffffffffffffff"] })
+      .expect(400);
+    // Original still intact.
+    const after = await request(app)
+      .get(apiPath(`/lots/${lotId}`))
+      .set(...authHeader(ctx.token))
+      .expect(200);
+    expect(after.body.photos[0].id).toBe(upload.body.photos[0].id);
   });
 
   it("DELETE: admin removes, operator forbidden", async () => {

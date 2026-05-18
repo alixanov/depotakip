@@ -18,6 +18,7 @@ import {
   UserCircle,
   Warehouse,
 } from "lucide-react";
+import type { User } from "@sadiyakargo/shared";
 import { BrandMark } from "@/components/BrandMark";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -150,7 +151,7 @@ function AppLayout() {
               <TopNavLink to="/depo" icon={<Warehouse className="h-4 w-4" />}>
                 {t("nav:warehouse")}
               </TopNavLink>
-              {user.role !== "viewer" && (
+              {user.role.permissions.includes("shipments:write") && (
                 <TopNavLink to="/cikis" icon={<Truck className="h-4 w-4" />}>
                   {t("nav:ship")}
                 </TopNavLink>
@@ -165,8 +166,9 @@ function AppLayout() {
                 {t("nav:reports")}
               </TopNavLink>
 
-              {/* Overflow drop-down: senders/carriers (operator+) + rates/users/notifications/audit (admin) */}
-              {user.role !== "viewer" && <AdminMenu role={user.role} />}
+              {/* Drop-down with all admin-area screens; hidden when the user
+                  doesn't have a single matching permission. */}
+              <AdminMenu permissions={user.role.permissions} />
             </nav>
           )}
 
@@ -249,11 +251,18 @@ function TopNavLink({
   );
 }
 
-function AdminMenu({ role }: { role: string }) {
+function AdminMenu({ permissions }: { permissions: string[] }) {
   const { t } = useTranslation();
-  const canMutate = role !== "viewer";
-  const isAdmin = role === "admin";
-  if (!canMutate && !isAdmin) return null;
+  const has = (perm: string) => permissions.includes(perm);
+  const canManageCounterparties = has("senders:write") || has("carriers:write");
+  const canSeeAdminSection =
+    has("users:manage") ||
+    has("roles:manage") ||
+    has("permissions:manage") ||
+    has("audit:read") ||
+    has("notifications:manage") ||
+    has("exchange_rates:manage");
+  if (!canManageCounterparties && !canSeeAdminSection) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -272,43 +281,62 @@ function AdminMenu({ role }: { role: string }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>{t("nav:manage")}</DropdownMenuLabel>
-        {canMutate && (
+        {canManageCounterparties && (
           <>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/senders" className="cursor-pointer">
-                <UsersIcon className="h-4 w-4" /> {t("nav:senders")}
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/carriers" className="cursor-pointer">
-                <Truck className="h-4 w-4" /> {t("nav:carriers")}
-              </Link>
-            </DropdownMenuItem>
+            {has("senders:write") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/senders" className="cursor-pointer">
+                  <UsersIcon className="h-4 w-4" /> {t("nav:senders")}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {has("carriers:write") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/carriers" className="cursor-pointer">
+                  <Truck className="h-4 w-4" /> {t("nav:carriers")}
+                </Link>
+              </DropdownMenuItem>
+            )}
           </>
         )}
-        {isAdmin && (
+        {canSeeAdminSection && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/admin/exchange-rates" className="cursor-pointer">
-                <Coins className="h-4 w-4" /> {t("nav:rates")}
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/users" className="cursor-pointer">
-                <ShieldCheck className="h-4 w-4" /> {t("nav:users")}
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/notifications" className="cursor-pointer">
-                <Bell className="h-4 w-4" /> {t("nav:notifications")}
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/audit" className="cursor-pointer">
-                <ScrollText className="h-4 w-4" /> {t("nav:audit")}
-              </Link>
-            </DropdownMenuItem>
+            {has("exchange_rates:manage") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/exchange-rates" className="cursor-pointer">
+                  <Coins className="h-4 w-4" /> {t("nav:rates")}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {has("users:manage") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/users" className="cursor-pointer">
+                  <ShieldCheck className="h-4 w-4" /> {t("nav:users")}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {has("roles:manage") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/access" className="cursor-pointer">
+                  <ShieldCheck className="h-4 w-4" /> {t("nav:access")}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {has("notifications:manage") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/notifications" className="cursor-pointer">
+                  <Bell className="h-4 w-4" /> {t("nav:notifications")}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {has("audit:read") && (
+              <DropdownMenuItem asChild>
+                <Link to="/admin/audit" className="cursor-pointer">
+                  <ScrollText className="h-4 w-4" /> {t("nav:audit")}
+                </Link>
+              </DropdownMenuItem>
+            )}
           </>
         )}
       </DropdownMenuContent>
@@ -316,13 +344,7 @@ function AdminMenu({ role }: { role: string }) {
   );
 }
 
-function UserMenu({
-  user,
-  onLogout,
-}: {
-  user: { fullName: string; email: string; role: string };
-  onLogout: () => void;
-}) {
+function UserMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { t } = useTranslation();
   return (
     <DropdownMenu>
@@ -347,7 +369,7 @@ function UserMenu({
           </div>
         </div>
         <div className="px-2 pb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-          {t("profile:info_role")}: <span className="font-semibold">{user.role}</span>
+          {t("profile:info_role")}: <span className="font-semibold">{user.role.name}</span>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

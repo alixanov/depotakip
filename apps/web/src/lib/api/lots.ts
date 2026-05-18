@@ -51,6 +51,11 @@ export const lotsApi = {
     request<SignedPhotoUrlResponse>(`/lots/${lotId}/photos/${photoId}`),
   removePhoto: (lotId: string, photoId: string) =>
     request<InboundLot>(`/lots/${lotId}/photos/${photoId}`, { method: "DELETE" }),
+  reorderPhotos: (lotId: string, photoIds: string[]) =>
+    request<InboundLot>(`/lots/${lotId}/photos/order`, {
+      method: "PATCH",
+      body: { photoIds },
+    }),
 };
 
 /** Download the receipt PDF using the current access token. Toast on failure

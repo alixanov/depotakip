@@ -29,3 +29,23 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+/**
+ * Hook-friendly permission check. Returns false until the user logs in.
+ * For components that already pulled `user` from the store, the standalone
+ * `userCan(user, perm)` helper avoids an extra subscription.
+ */
+export function useCan(perm: string): boolean {
+  return useAuthStore((s) => !!s.user?.role.permissions.includes(perm));
+}
+
+export function useCanAny(...perms: string[]): boolean {
+  return useAuthStore((s) => {
+    const granted = s.user?.role.permissions ?? [];
+    return perms.some((p) => granted.includes(p));
+  });
+}
+
+export function userCan(user: User | null | undefined, perm: string): boolean {
+  return !!user?.role.permissions.includes(perm);
+}

@@ -185,15 +185,15 @@ describe("Triggers", () => {
     expect(logs).toBe(0);
   });
 
-  it("sender_payment triggers payment_received notification", async () => {
+  it("carrier_payment triggers payment_received notification", async () => {
     const auth = authHeader(ctx.token);
 
     await request(app)
       .post(apiPath("/transactions"))
       .set(...auth)
       .send({
-        kind: "sender_payment",
-        counterparty: { type: "sender", id: ctx.senderId },
+        kind: "carrier_payment",
+        counterparty: { type: "carrier", id: ctx.carrierId },
         amount: 1500,
         currency: "USD",
         direction: "credit",
@@ -206,7 +206,7 @@ describe("Triggers", () => {
       templateKey: "payment_received",
     });
     expect(logs).toHaveLength(1);
-    expect(logs[0].recipientRef.chatId).toBe(111);
+    expect(logs[0].recipientRef.chatId).toBe(222);
     expect(logs[0].status).toBe("sent");
   });
 });

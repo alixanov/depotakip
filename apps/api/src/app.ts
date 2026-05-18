@@ -16,6 +16,8 @@ import { audit } from "./middleware/audit.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import usersRoutes from "./modules/users/users.routes.js";
+import permissionsRoutes from "./modules/access/permissions.routes.js";
+import rolesRoutes from "./modules/access/roles.routes.js";
 import sendersRoutes from "./modules/senders/senders.routes.js";
 import carriersRoutes from "./modules/carriers/carriers.routes.js";
 import exchangeRatesRoutes from "./modules/exchangeRates/exchangeRates.routes.js";
@@ -86,6 +88,8 @@ export function createApp(): Express {
   app.use(`${env.API_PREFIX}/health`, healthRoutes);
   app.use(`${env.API_PREFIX}/auth`, authRoutes);
   app.use(`${env.API_PREFIX}/users`, usersRoutes);
+  app.use(`${env.API_PREFIX}/permissions`, permissionsRoutes);
+  app.use(`${env.API_PREFIX}/roles`, rolesRoutes);
   app.use(`${env.API_PREFIX}/senders`, sendersRoutes);
   app.use(`${env.API_PREFIX}/carriers`, carriersRoutes);
   app.use(`${env.API_PREFIX}/exchange-rates`, exchangeRatesRoutes);

@@ -66,3 +66,9 @@ export const removePhoto = asyncHandler<PhotoParams>(async (req, res) => {
   if (!req.orgId) throw unauthorized();
   res.json(await service.removePhoto(req.orgId, req.params.id, req.params.photoId));
 });
+
+export const reorderPhotos = asyncHandler<IdParams>(async (req, res) => {
+  if (!req.orgId) throw unauthorized();
+  const body = req.body as { photoIds: string[] };
+  res.json(await service.reorderPhotos(req.orgId, req.params.id, body.photoIds));
+});

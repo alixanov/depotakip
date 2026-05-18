@@ -32,6 +32,22 @@ interface ListQuery {
   availableOnly?: boolean;
 }
 
+/**
+ * One-hour signed URL for the first photo, so list views (e.g. the shipment
+ * lot-picker combobox) can show a thumbnail without an extra round-trip per
+ * lot. `undefined` when the lot has no photos.
+ */
+const FIRST_PHOTO_TTL_SECONDS = 60 * 60;
+
+type LotClient = ReturnType<InstanceType<typeof InboundLot>["toClient"]>;
+
+async function withFirstPhotoUrl(lot: LotClient): Promise<LotClient & { firstPhotoUrl?: string }> {
+  const first = lot.photos[0];
+  if (!first) return lot;
+  const firstPhotoUrl = await getPresignedGetUrl(first.storageKey, FIRST_PHOTO_TTL_SECONDS);
+  return { ...lot, firstPhotoUrl };
+}
+
 export async function list(orgId: string, query: ListQuery) {
   const filter = tenantFilter(orgId);
   if (query.senderId) Object.assign(filter, { senderId: new Types.ObjectId(query.senderId) });
@@ -43,13 +59,15 @@ export async function list(orgId: string, query: ListQuery) {
     if (query.to) range.$lte = new Date(query.to);
     Object.assign(filter, { receivedAt: range });
   }
-  return paginate(InboundLot, filter, query, (d) => d.toClient(), { receivedAt: -1 });
+  const page = await paginate(InboundLot, filter, query, (d) => d.toClient(), { receivedAt: -1 });
+  page.data = await Promise.all(page.data.map(withFirstPhotoUrl));
+  return page;
 }
 
 export async function get(orgId: string, id: string) {
   const doc = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
   if (!doc) throw notFound("Parti bulunamadı");
-  return doc.toClient();
+  return withFirstPhotoUrl(doc.toClient());
 }
 
 export async function create(orgId: string, input: CreateLotInput) {
@@ -169,7 +187,7 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
     { new: true }
   );
   if (!updated) throw notFound("Parti bulunamadı");
-  return updated.toClient();
+  return withFirstPhotoUrl(updated.toClient());
 }
 
 export async function removePhoto(orgId: string, lotId: string, photoId: string) {
@@ -189,7 +207,55 @@ export async function removePhoto(orgId: string, lotId: string, photoId: string)
     { new: true }
   );
   if (!updated) throw notFound("Parti bulunamadı");
-  return updated.toClient();
+  return withFirstPhotoUrl(updated.toClient());
+}
+
+export async function reorderPhotos(orgId: string, lotId: string, photoIds: string[]) {
+  const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
+  if (!lot) throw notFound("Parti bulunamadı");
+
+  if (photoIds.length !== lot.photos.length) {
+    throw badRequest("Tüm mevcut fotoğraf id'leri sırada gönderilmelidir", {
+      expected: lot.photos.length,
+      received: photoIds.length,
+    });
+  }
+  if (new Set(photoIds).size !== photoIds.length) {
+    throw badRequest("Sırada tekrar eden fotoğraf id'si var");
+  }
+
+  // Build a lookup of the existing subdocs by id; if any incoming id is
+  // unknown the request describes a different set, not a permutation. The
+  // PhotoRef shape in this module is a plain TS interface (not a Mongoose
+  // subdoc), so we copy fields explicitly instead of calling .toObject().
+  const photoById = new Map(
+    lot.photos.map((p) => [
+      p._id.toString(),
+      {
+        _id: p._id,
+        storageKey: p.storageKey,
+        mimeType: p.mimeType,
+        sizeBytes: p.sizeBytes,
+        width: p.width,
+        height: p.height,
+        uploadedAt: p.uploadedAt,
+      },
+    ])
+  );
+  const reordered: ReturnType<typeof photoById.get>[] = [];
+  for (const id of photoIds) {
+    const found = photoById.get(id);
+    if (!found) throw badRequest(`Bilinmeyen fotoğraf id: ${id}`);
+    reordered.push(found);
+  }
+
+  const updated = await InboundLot.findOneAndUpdate(
+    tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }),
+    { $set: { photos: reordered } },
+    { new: true }
+  );
+  if (!updated) throw notFound("Parti bulunamadı");
+  return withFirstPhotoUrl(updated.toClient());
 }
 
 export async function getPhotoUrl(

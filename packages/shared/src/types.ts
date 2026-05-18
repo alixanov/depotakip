@@ -5,7 +5,7 @@ import type {
   NotificationLanguage,
   NotificationTemplateKey,
   PaymentMethod,
-  Role,
+  PermissionGroup,
   Status,
   TransactionKind,
 } from "./constants.js";
@@ -33,12 +33,20 @@ export interface SignedPhotoUrlResponse {
   expiresAt: string;
 }
 
+export interface UserRoleRef {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  permissions: string[];
+}
+
 export interface User {
   id: string;
   email: string;
   fullName: string;
   phone?: string;
-  role: Role;
+  /** Denormalised role reference + the flat permission keys for fast UI checks. */
+  role: UserRoleRef;
   active: boolean;
   lastLoginAt?: string | null;
 }
@@ -47,6 +55,29 @@ export interface AuthResponse {
   user: User;
   /** Access JWT (also returned in body for non-cookie clients). */
   accessToken: string;
+}
+
+export interface Permission {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  group: PermissionGroup | null;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  isSystem: boolean;
+  /** Helpful for the admin Roles page — disables delete when > 0. */
+  userCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Sender {
@@ -84,6 +115,13 @@ export interface InboundLot {
   status: LotStatus;
   notes: string;
   photos: PhotoRef[];
+  /**
+   * One-hour presigned URL for `photos[0]` — surfaced by `/lots` and
+   * `/lots/:id` so list-style views (shipment lot-picker) can show a
+   * thumbnail without an extra round-trip. Undefined when the lot has
+   * no photos.
+   */
+  firstPhotoUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,7 +136,6 @@ export interface ShipmentItem {
   id: string;
   lotId: string;
   qty: number;
-  senderCharge: Money | null;
 }
 
 export interface ShipmentStatusEvent {
@@ -129,7 +166,7 @@ export interface Shipment {
 export interface Transaction {
   id: string;
   kind: TransactionKind;
-  counterparty: { type: "carrier" | "sender"; id: string };
+  counterparty: { type: "carrier"; id: string };
   shipmentId: string | null;
   amount: number;
   currency: Currency;

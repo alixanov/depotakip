@@ -1,6 +1,7 @@
 export * from "./common.js";
 export * from "./auth.js";
 export * from "./user.js";
+export * from "./access.js";
 export * from "./sender.js";
 export * from "./carrier.js";
 export * from "./lot.js";

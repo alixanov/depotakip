@@ -15,5 +15,11 @@ export const updateLotSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+/** PATCH /lots/:id/photos/order — must include every existing photoId exactly once. */
+export const reorderPhotosSchema = z.object({
+  photoIds: z.array(objectIdSchema).min(1).max(50),
+});
+
 export type CreateLotInput = z.infer<typeof createLotSchema>;
 export type UpdateLotInput = z.infer<typeof updateLotSchema>;
+export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;

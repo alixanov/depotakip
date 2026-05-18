@@ -29,12 +29,9 @@ import { LotStatusPill } from "@/components/ui/status-pill";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import { PhotoGalleryLightbox } from "@/components/PhotoGalleryLightbox";
-
-// Mirrors apps/api/.env LOT_PHOTO_MAX_COUNT/BYTES. Server-side limits are the
-// source of truth; these are UX hints + early rejection so the user doesn't
-// upload a 50MB file just to get a 413 back.
-const PHOTO_MAX_COUNT = 10;
-const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+import { PhotoThumb } from "@/components/PhotoThumb";
+import { SenderFormDialog } from "@/components/SenderFormDialog";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
   Select,
   SelectContent,
@@ -42,6 +39,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// Mirrors apps/api/.env LOT_PHOTO_MAX_COUNT/BYTES. Server-side limits are the
+// source of truth; these are UX hints + early rejection so the user doesn't
+// upload a 50MB file just to get a 413 back.
+const PHOTO_MAX_COUNT = 10;
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 const TABS = ["lots", "receive", "stock"] as const;
 type Tab = (typeof TABS)[number];
@@ -335,10 +338,16 @@ function LotsTab() {
       {galleryLot && (
         <PhotoGalleryLightbox
           lotId={galleryLot.id}
-          photos={galleryLot.photos}
+          photos={
+            // Stay in sync with the latest list — after a reorder/delete the
+            // server returns a new array, so we read it from the cache rather
+            // than the stale `galleryLot` snapshot captured on open.
+            lotsQuery.data?.data.find((l) => l.id === galleryLot.id)?.photos ?? galleryLot.photos
+          }
           open={!!galleryLot}
           onOpenChange={(o) => !o && setGalleryLot(null)}
           canDelete={role === "admin"}
+          canReorder={role === "admin" || role === "operator"}
         />
       )}
     </div>
@@ -366,6 +375,7 @@ function ReceiveTab() {
   const qc = useQueryClient();
   const [serverError, setServerError] = useState("");
   const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
+  const [senderDialogOpen, setSenderDialogOpen] = useState(false);
   const { t } = useTranslation();
 
   const sendersQuery = useQuery({
@@ -494,6 +504,16 @@ function ReceiveTab() {
                   )}
                   placeholder={t("select")}
                   aria-invalid={!!form.formState.errors.senderId}
+                  footer={
+                    <button
+                      type="button"
+                      onClick={() => setSenderDialogOpen(true)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-primary hover:bg-primary-soft"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {t("admin:btn_new_sender")}
+                    </button>
+                  }
                 />
               )}
             />
@@ -517,10 +537,7 @@ function ReceiveTab() {
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>
-              {t("depo:form_label")}{" "}
-              <span className="font-normal text-muted-foreground">{t("optional")}</span>
-            </Label>
+            <Label>{t("depo:form_label")}</Label>
             <Input
               {...form.register("label")}
               placeholder={t("depo:form_label_ph")}
@@ -579,11 +596,8 @@ function ReceiveTab() {
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>
-              {t("depo:form_notes")}{" "}
-              <span className="font-normal text-muted-foreground">{t("optional")}</span>
-            </Label>
-            <Textarea {...form.register("notes")} placeholder={t("depo:form_notes_ph")} rows={3} />
+            <Label>{t("depo:form_notes")}</Label>
+            <Textarea {...form.register("notes")} rows={3} />
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
@@ -619,61 +633,192 @@ function ReceiveTab() {
           </div>
         </form>
       </CardContent>
+      <SenderFormDialog
+        open={senderDialogOpen}
+        onOpenChange={setSenderDialogOpen}
+        onCreated={(sender) => {
+          // Auto-select the freshly created sender + invalidate the cached
+          // list so the Combobox sees the new entry on its next open.
+          form.setValue("senderId", sender.id, { shouldValidate: true });
+          qc.invalidateQueries({ queryKey: ["senders"] });
+        }}
+      />
     </Card>
   );
 }
 
+/**
+ * Stock = lots with qtyAvailable > 0, shown as a rich per-lot table:
+ *   [photo] | label | unit price | qty | sender
+ *
+ * Filters: sender (combobox) + label search (debounced). Filtering happens on
+ * the client because lots/list does not yet support label search server-side —
+ * the dataset is bounded (server returns at most `limit` items per page).
+ */
 function StockTab() {
   const { t } = useTranslation();
-  const bySender = useQuery({
-    queryKey: ["lots", "stock", "by-sender"],
-    queryFn: lotsApi.stockBySender,
+  const [senderFilter, setSenderFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [galleryLot, setGalleryLot] = useState<InboundLot | null>(null);
+  const debouncedSearch = useDebouncedValue(search, 200);
+
+  const sendersQuery = useQuery({
+    queryKey: ["senders", "all"],
+    queryFn: () => sendersApi.list({ limit: 200 }),
+  });
+  // 200 covers small/mid warehouses without pagination noise. If stock grows
+  // past that we add server-side pagination + search params here.
+  const lotsQuery = useQuery({
+    queryKey: ["lots", "stock", { senderFilter }],
+    queryFn: () =>
+      lotsApi.list({
+        limit: 200,
+        available: true,
+        senderId: senderFilter || undefined,
+      }),
   });
 
+  const senderName = (id: string) =>
+    sendersQuery.data?.data.find((s) => s.id === id)?.fullName || "—";
+
+  const filtered = (lotsQuery.data?.data ?? []).filter((l) => {
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch.toLowerCase();
+    return l.label?.toLowerCase().includes(q);
+  });
+
+  const columns: Column<InboundLot>[] = [
+    {
+      key: "photo",
+      header: t("depo:col_photo"),
+      width: "72px",
+      cell: (l) => (
+        <PhotoThumb
+          lotId={l.id}
+          photoId={l.photos[0]?.id ?? null}
+          size={48}
+          onClick={l.photos.length > 0 ? () => setGalleryLot(l) : undefined}
+        />
+      ),
+    },
+    {
+      key: "label",
+      header: t("depo:col_label"),
+      cell: (l) => (
+        <div className="min-w-0">
+          <div className="truncate font-medium">
+            {l.label || <span className="text-muted-foreground">—</span>}
+          </div>
+          <div className="truncate text-xs text-muted-foreground">{formatDate(l.receivedAt)}</div>
+        </div>
+      ),
+    },
+    {
+      key: "unitPrice",
+      header: t("depo:col_unitPrice"),
+      width: "120px",
+      className: "text-right",
+      cell: (l) =>
+        l.unitPrice ? (
+          <span className="tabular-nums">{formatMoneyObject(l.unitPrice)}</span>
+        ) : (
+          <span className="text-muted-foreground">{t("depo:unitPrice_empty")}</span>
+        ),
+    },
+    {
+      key: "qty",
+      header: t("depo:col_qty"),
+      width: "110px",
+      className: "text-right",
+      cell: (l) => (
+        <span className="tabular-nums">
+          <span className="font-bold">{l.qtyAvailable}</span>
+          <span className="text-muted-foreground"> / {l.qtyIn}</span>
+        </span>
+      ),
+    },
+    {
+      key: "sender",
+      header: t("depo:col_sender"),
+      cell: (l) => <span className="truncate">{senderName(l.senderId)}</span>,
+    },
+  ];
+
   return (
-    <div className="grid gap-4">
-      <StockCard title={t("depo:stock_by_sender")} query={bySender} />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1 sm:max-w-xs">
+          <Input
+            placeholder={t("depo:stock_search_ph")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="w-48">
+          <Combobox
+            options={[
+              { id: "", fullName: t("depo:filter_senders") },
+              ...(sendersQuery.data?.data ?? []),
+            ]}
+            value={senderFilter}
+            onChange={setSenderFilter}
+            getValue={(s) => s.id}
+            getLabel={(s) => s.fullName}
+            placeholder={t("depo:filter_senders")}
+          />
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            loading={lotsQuery.isLoading}
+            error={lotsQuery.error as Error | null}
+            rowKey={(l) => l.id}
+            empty={t("depo:stock_empty")}
+            renderCard={(l) => (
+              <div className="flex gap-3">
+                <PhotoThumb
+                  lotId={l.id}
+                  photoId={l.photos[0]?.id ?? null}
+                  size={64}
+                  onClick={l.photos.length > 0 ? () => setGalleryLot(l) : undefined}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-semibold">
+                      {l.label || <span className="text-muted-foreground">—</span>}
+                    </p>
+                    <span className="shrink-0 text-sm tabular-nums">
+                      <span className="font-bold">{l.qtyAvailable}</span>
+                      <span className="text-muted-foreground"> / {l.qtyIn}</span>
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {senderName(l.senderId)} · {formatDate(l.receivedAt)}
+                  </p>
+                  {l.unitPrice && (
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      {formatMoneyObject(l.unitPrice)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      {galleryLot && (
+        <PhotoGalleryLightbox
+          lotId={galleryLot.id}
+          photos={galleryLot.photos}
+          open={!!galleryLot}
+          onOpenChange={(o) => !o && setGalleryLot(null)}
+        />
+      )}
     </div>
-  );
-}
-
-interface StockQueryLike {
-  data?: { id: string; name: string; totalAvailable: number; lots: number }[];
-  isLoading: boolean;
-  error: unknown;
-}
-
-function StockCard({ title, query }: { title: string; query: StockQueryLike }) {
-  const { t } = useTranslation();
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </h3>
-        {query.isLoading && <p className="text-sm text-muted-foreground">{t("loading")}</p>}
-        {query.error instanceof Error && (
-          <p className="text-sm text-destructive">{query.error.message}</p>
-        )}
-        {query.data && query.data.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t("depo:stock_empty")}</p>
-        )}
-        {query.data && query.data.length > 0 && (
-          <ul className="divide-y">
-            {query.data.map((row) => (
-              <li key={row.id} className="flex items-center justify-between py-2 text-sm">
-                <span>{row.name}</span>
-                <span className="tabular-nums">
-                  <span className="font-bold">{row.totalAvailable}</span>{" "}
-                  <span className="text-xs text-muted-foreground">
-                    {t("depo:stock_lot_count", { n: row.lots })}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
   );
 }

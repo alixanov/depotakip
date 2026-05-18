@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import type { PhotoRef } from "@sadiyakargo/shared";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -17,6 +24,8 @@ interface PhotoGalleryLightboxProps {
   /** Photo id to focus on open; defaults to the first photo. */
   initialPhotoId?: string;
   canDelete?: boolean;
+  /** When true, shows ◀◀ / ▶▶ move buttons that PATCH the photos array order. */
+  canReorder?: boolean;
 }
 
 export function PhotoGalleryLightbox({
@@ -26,6 +35,7 @@ export function PhotoGalleryLightbox({
   onOpenChange,
   initialPhotoId,
   canDelete = false,
+  canReorder = false,
 }: PhotoGalleryLightboxProps) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -76,19 +86,51 @@ export function PhotoGalleryLightbox({
       }),
   });
 
-  const goPrev = () => setIndex((i) => (i - 1 + photos.length) % photos.length);
-  const goNext = () => setIndex((i) => (i + 1) % photos.length);
+  // Reorder swaps the current photo with its neighbour and PATCHes the new
+  // full id list. After success we follow the moved photo to keep focus on it.
+  const reorderMutation = useMutation({
+    mutationFn: (newIds: string[]) => lotsApi.reorderPhotos(lotId, newIds),
+    onSuccess: (updated, vars) => {
+      qc.invalidateQueries({ queryKey: ["lots"] });
+      const movedId = photos[index]?.id;
+      const nextIdx = movedId ? updated.photos.findIndex((p) => p.id === movedId) : -1;
+      // The id list we sent is authoritative — use it to position the cursor
+      // even before the parent re-renders with the new photos prop.
+      const fallback = vars.indexOf(movedId ?? "");
+      setIndex(Math.max(0, nextIdx >= 0 ? nextIdx : fallback));
+    },
+    onError: (err) =>
+      toast.error(t("photo:reorder_failed"), {
+        description: err instanceof Error ? err.message : undefined,
+      }),
+  });
 
+  const moveBy = (delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= photos.length) return;
+    const next = photos.map((p) => p.id);
+    [next[index], next[target]] = [next[target], next[index]];
+    reorderMutation.mutate(next);
+  };
+
+  // Index manipulation is inlined into the keydown handler so the effect can
+  // depend only on photos.length — extracting goPrev/goNext as separate fns
+  // would have ESLint flagging them as missing deps on every render.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") goPrev();
-      if (e.key === "ArrowRight") goNext();
+      if (e.key === "ArrowLeft") {
+        setIndex((i) => (i - 1 + photos.length) % photos.length);
+      } else if (e.key === "ArrowRight") {
+        setIndex((i) => (i + 1) % photos.length);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // photos.length is the only thing goPrev/goNext close over that changes.
   }, [open, photos.length]);
+
+  const goPrev = () => setIndex((i) => (i - 1 + photos.length) % photos.length);
+  const goNext = () => setIndex((i) => (i + 1) % photos.length);
 
   if (!current) return null;
 
@@ -140,22 +182,48 @@ export function PhotoGalleryLightbox({
             <span className="text-muted-foreground tabular-nums">
               {index + 1} / {photos.length}
             </span>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="hidden truncate text-xs text-muted-foreground sm:inline">
               {Math.round(current.sizeBytes / 1024)} KB
               {current.width && current.height && ` · ${current.width}×${current.height}`}
             </span>
-            {canDelete && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDeleteOpen(true)}
-                disabled={deleteMutation.isPending}
-              >
-                <Trash2 className="mr-1 h-4 w-4 text-destructive" />
-                {t("photo:delete")}
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {canReorder && photos.length > 1 && (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => moveBy(-1)}
+                    disabled={index === 0 || reorderMutation.isPending}
+                    aria-label={t("photo:move_left")}
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => moveBy(1)}
+                    disabled={index === photos.length - 1 || reorderMutation.isPending}
+                    aria-label={t("photo:move_right")}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {canDelete && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="mr-1 h-4 w-4 text-destructive" />
+                  {t("photo:delete")}
+                </Button>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

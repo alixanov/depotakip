@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Types } from "mongoose";
 import { z } from "zod";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { unauthorized } from "../../lib/errors.js";
@@ -34,7 +34,7 @@ interface AuditAggRow {
 
 router.get(
   "/",
-  requireRole("admin"),
+  requirePermission("audit:read"),
   validate({ query: querySchema }),
   asyncHandler(async (req, res) => {
     if (!req.orgId) throw unauthorized();

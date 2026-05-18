@@ -1,18 +1,18 @@
 import { z } from "zod";
-import { ROLES } from "../constants.js";
 import { emailSchema, passwordSchema } from "./auth.js";
+import { objectIdSchema } from "./common.js";
 
 export const createUserSchema = z.object({
   email: emailSchema,
   fullName: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(40).optional(),
-  role: z.enum(ROLES),
+  roleId: objectIdSchema,
 });
 
 export const updateUserSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
   phone: z.string().trim().max(40).optional(),
-  role: z.enum(ROLES).optional(),
+  roleId: objectIdSchema.optional(),
   active: z.boolean().optional(),
 });
 

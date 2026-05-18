@@ -42,8 +42,103 @@ export const STATUS_LABELS: Record<Status, StatusMeta> = {
 export const CURRENCIES = ["USD", "UZS", "TRY"] as const;
 export type Currency = (typeof CURRENCIES)[number];
 
-export const ROLES = ["admin", "operator", "viewer"] as const;
-export type Role = (typeof ROLES)[number];
+/** Built-in roles seeded by migration; cannot be deleted via the admin UI. */
+export const SYSTEM_ROLE_NAMES = ["admin", "operator", "viewer"] as const;
+export type SystemRoleName = (typeof SYSTEM_ROLE_NAMES)[number];
+
+/**
+ * UI-facing grouping for the permission matrix. Keep aligned with the
+ * `group` field on system permissions below — the admin Roles page uses
+ * this to render section headers.
+ */
+export const PERMISSION_GROUPS = [
+  "warehouse",
+  "shipments",
+  "finance",
+  "reference",
+  "reports",
+  "admin",
+] as const;
+export type PermissionGroup = (typeof PERMISSION_GROUPS)[number];
+
+export interface SystemPermissionDef {
+  key: string;
+  label: string;
+  description?: string;
+  group: PermissionGroup;
+}
+
+/**
+ * Source-of-truth catalogue of permissions actually checked in the codebase.
+ * Migration 0005-rbac upserts these into the `permissions` collection with
+ * isSystem=true. Adding a new requirePermission("foo:bar") call in code REQUIRES
+ * appending it here so the seed picks it up — otherwise admins can't grant it.
+ *
+ * Permission keys use `module:action[:subaction]` (lower kebab). New custom
+ * permissions added via the admin UI follow the same convention but are not
+ * required to map to an actual endpoint — they can serve as feature flags.
+ */
+export const SYSTEM_PERMISSIONS: readonly SystemPermissionDef[] = [
+  // — warehouse
+  { key: "lots:read", group: "warehouse", label: "Партии — просмотр" },
+  { key: "lots:write", group: "warehouse", label: "Партии — создание и редактирование" },
+  { key: "lots:delete", group: "warehouse", label: "Партии — удаление" },
+  { key: "lots:photos:delete", group: "warehouse", label: "Партии — удаление фото" },
+  // — shipments
+  { key: "shipments:read", group: "shipments", label: "Отгрузки — просмотр" },
+  { key: "shipments:write", group: "shipments", label: "Отгрузки — создание и смена статуса" },
+  { key: "shipments:cancel", group: "shipments", label: "Отгрузки — отмена (реверс qtyAvailable)" },
+  // — finance
+  { key: "transactions:read", group: "finance", label: "Операции — просмотр" },
+  { key: "transactions:write", group: "finance", label: "Операции — регистрация платежа" },
+  { key: "exchange_rates:read", group: "finance", label: "Курсы валют — просмотр" },
+  { key: "exchange_rates:manage", group: "finance", label: "Курсы валют — управление" },
+  // — reference
+  { key: "senders:read", group: "reference", label: "Отправители — просмотр" },
+  { key: "senders:write", group: "reference", label: "Отправители — создание и редактирование" },
+  { key: "senders:delete", group: "reference", label: "Отправители — удаление" },
+  { key: "carriers:read", group: "reference", label: "Перевозчики — просмотр" },
+  { key: "carriers:write", group: "reference", label: "Перевозчики — создание и редактирование" },
+  { key: "carriers:delete", group: "reference", label: "Перевозчики — удаление" },
+  // — reports
+  { key: "reports:read", group: "reports", label: "Отчёты и dashboard — просмотр" },
+  // — admin
+  { key: "users:manage", group: "admin", label: "Пользователи — управление" },
+  { key: "roles:manage", group: "admin", label: "Роли — управление" },
+  { key: "permissions:manage", group: "admin", label: "Разрешения — управление каталогом" },
+  { key: "notifications:read", group: "admin", label: "Уведомления — просмотр шаблонов и логов" },
+  { key: "notifications:manage", group: "admin", label: "Уведомления — управление шаблонами" },
+  { key: "audit:read", group: "admin", label: "Audit log — просмотр" },
+] as const;
+
+/** Permission set for each seeded system role. */
+export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRoleName, readonly string[]> = {
+  admin: SYSTEM_PERMISSIONS.map((p) => p.key),
+  operator: [
+    "lots:read",
+    "lots:write",
+    "shipments:read",
+    "shipments:write",
+    "shipments:cancel",
+    "transactions:read",
+    "transactions:write",
+    "exchange_rates:read",
+    "senders:read",
+    "senders:write",
+    "carriers:read",
+    "carriers:write",
+    "reports:read",
+  ],
+  viewer: [
+    "lots:read",
+    "shipments:read",
+    "transactions:read",
+    "exchange_rates:read",
+    "senders:read",
+    "carriers:read",
+    "reports:read",
+  ],
+};
 
 export const NOTIFICATION_CHANNELS = ["sms", "telegram"] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -62,13 +157,7 @@ export const NOTIFICATION_TEMPLATE_KEYS = [
 ] as const;
 export type NotificationTemplateKey = (typeof NOTIFICATION_TEMPLATE_KEYS)[number];
 
-export const TRANSACTION_KINDS = [
-  "carrier_charge",
-  "carrier_payment",
-  "sender_charge",
-  "sender_payment",
-  "adjustment",
-] as const;
+export const TRANSACTION_KINDS = ["carrier_charge", "carrier_payment", "adjustment"] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 export const PAYMENT_METHODS = ["cash", "bank", "card", "other"] as const;

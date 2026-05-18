@@ -6,7 +6,7 @@ import {
   idParamSchema,
   updateShipmentStatusSchema,
 } from "@sadiyakargo/shared";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { idempotency } from "../../middleware/idempotency.js";
 import { env } from "../../config/env.js";
@@ -21,14 +21,14 @@ router.get("/:id/waybill.pdf", validate({ params: idParamSchema }), waybillPdf);
 router.get("/:id", validate({ params: idParamSchema }), controller.get);
 router.post(
   "/",
-  requireRole("admin", "operator"),
+  requirePermission("shipments:write"),
   idempotency,
   validate({ body: createShipmentSchema }),
   controller.create
 );
 router.patch(
   "/:id/status",
-  requireRole("admin", "operator"),
+  requirePermission("shipments:write"),
   validate({ params: idParamSchema, body: updateShipmentStatusSchema }),
   controller.updateStatus
 );

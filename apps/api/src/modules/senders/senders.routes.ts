@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createSenderSchema, idParamSchema, updateSenderSchema } from "@sadiyakargo/shared";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./senders.controller.js";
 
@@ -11,16 +11,21 @@ router.get("/", controller.list);
 router.get("/:id", validate({ params: idParamSchema }), controller.get);
 router.post(
   "/",
-  requireRole("admin", "operator"),
+  requirePermission("senders:write"),
   validate({ body: createSenderSchema }),
   controller.create
 );
 router.patch(
   "/:id",
-  requireRole("admin", "operator"),
+  requirePermission("senders:write"),
   validate({ params: idParamSchema, body: updateSenderSchema }),
   controller.update
 );
-router.delete("/:id", requireRole("admin"), validate({ params: idParamSchema }), controller.remove);
+router.delete(
+  "/:id",
+  requirePermission("senders:delete"),
+  validate({ params: idParamSchema }),
+  controller.remove
+);
 
 export default router;

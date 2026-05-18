@@ -3,9 +3,10 @@ import {
   createLotSchema,
   idParamSchema,
   lotPhotoIdParamSchema,
+  reorderPhotosSchema,
   updateLotSchema,
 } from "@sadiyakargo/shared";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requirePermission } from "../../middleware/auth.js";
 import { lotPhotoUpload } from "../../middleware/upload.js";
 import { validate } from "../../middleware/validate.js";
 import * as controller from "./lots.controller.js";
@@ -25,22 +26,27 @@ router.get("/:id", validate({ params: idParamSchema }), controller.get);
 
 router.post(
   "/",
-  requireRole("admin", "operator"),
+  requirePermission("lots:write"),
   validate({ body: createLotSchema }),
   controller.create
 );
 router.patch(
   "/:id",
-  requireRole("admin", "operator"),
+  requirePermission("lots:write"),
   validate({ params: idParamSchema, body: updateLotSchema }),
   controller.update
 );
-router.delete("/:id", requireRole("admin"), validate({ params: idParamSchema }), controller.remove);
+router.delete(
+  "/:id",
+  requirePermission("lots:delete"),
+  validate({ params: idParamSchema }),
+  controller.remove
+);
 
 // ── Photos ────────────────────────────────────────────────────────────────
 router.post(
   "/:id/photos",
-  requireRole("admin", "operator"),
+  requirePermission("lots:write"),
   validate({ params: idParamSchema }),
   lotPhotoUpload,
   controller.addPhotos
@@ -50,9 +56,15 @@ router.get(
   validate({ params: lotPhotoIdParamSchema }),
   controller.getPhotoUrl
 );
+router.patch(
+  "/:id/photos/order",
+  requirePermission("lots:write"),
+  validate({ params: idParamSchema, body: reorderPhotosSchema }),
+  controller.reorderPhotos
+);
 router.delete(
   "/:id/photos/:photoId",
-  requireRole("admin"),
+  requirePermission("lots:photos:delete"),
   validate({ params: lotPhotoIdParamSchema }),
   controller.removePhoto
 );

@@ -11,6 +11,8 @@ import { emitOrgEvent } from "../../lib/realtime.js";
 import { createTx } from "../transactions/transactions.service.js";
 import { Transaction } from "../transactions/transaction.model.js";
 import { enqueue as enqueueNotification } from "../notifications/notifications.service.js";
+// Senders still receive shipment-status Telegram notifications (their cargo
+// is on the move) — that's a delivery signal, not a financial one.
 import { Sender } from "../senders/sender.model.js";
 
 interface ListQuery {
@@ -110,13 +112,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
       const seq = await nextSequence(`shipment_${year}`, session);
       const shortCode = `SH-${year}-${String(seq).padStart(5, "0")}`;
 
-      // 3. insert shipment + auto-generated financial transactions
-      const lotSenderMap = new Map<string, string>();
-      for (const item of input.items) {
-        const lot = await InboundLot.findById(item.lotId, null, { session });
-        if (lot) lotSenderMap.set(item.lotId, lot.senderId.toString());
-      }
-
+      // 3. insert shipment
       const [doc] = await Shipment.create(
         [
           {
@@ -129,7 +125,6 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
             items: input.items.map((it) => ({
               lotId: new Types.ObjectId(it.lotId),
               qty: it.qty,
-              senderCharge: it.senderCharge ?? null,
             })),
             status: "bekliyor",
             statusHistory: [
@@ -149,14 +144,15 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
       );
       created = doc;
 
-      // 4. financial side-effects (carrier_charge + per-item sender_charge)
-      const shipmentId = doc._id.toString();
+      // 4. financial side-effects — only the carrier_charge.
+      // The sender side was removed in v2.3 (we don't pay senders, they
+      // don't pay us); shipment.items no longer carry senderCharge.
       await createTx(
         orgId,
         {
           kind: "carrier_charge",
           counterparty: { type: "carrier", id: carrier._id.toString() },
-          shipmentId,
+          shipmentId: doc._id.toString(),
           amount: input.carrierFee.amount,
           currency: input.carrierFee.currency,
           direction: "debit",
@@ -164,24 +160,6 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
         },
         session
       );
-      for (const item of input.items) {
-        if (!item.senderCharge) continue;
-        const senderId = lotSenderMap.get(item.lotId);
-        if (!senderId) continue;
-        await createTx(
-          orgId,
-          {
-            kind: "sender_charge",
-            counterparty: { type: "sender", id: senderId },
-            shipmentId,
-            amount: item.senderCharge.amount,
-            currency: item.senderCharge.currency,
-            direction: "debit",
-            notes: `Sevkiyat ${doc.shortCode}`,
-          },
-          session
-        );
-      }
     });
 
     if (!created) throw new Error("transaction did not produce a shipment");

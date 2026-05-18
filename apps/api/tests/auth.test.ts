@@ -119,7 +119,7 @@ describe("GET /auth/me", () => {
       .set(...authHeader(session.accessToken))
       .expect(200);
     expect(res.body.user.id).toBe(session.user.id);
-    expect(res.body.user.role).toBe("operator");
+    expect(res.body.user.role.name).toBe("operator");
   });
 
   it("rejects when missing token", async () => {

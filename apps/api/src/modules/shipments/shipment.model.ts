@@ -16,7 +16,6 @@ interface ShipmentItem {
   _id: Types.ObjectId;
   lotId: Types.ObjectId;
   qty: number;
-  senderCharge: Money | null;
 }
 
 interface StatusEvent {
@@ -51,7 +50,7 @@ export interface ShipmentDoc extends Document {
     shipmentDate: string;
     carrierFee: Money;
     status: Status;
-    items: { id: string; lotId: string; qty: number; senderCharge: Money | null }[];
+    items: { id: string; lotId: string; qty: number }[];
     statusHistory: {
       fromStatus: Status | null;
       toStatus: Status;
@@ -95,7 +94,6 @@ const itemSchema = new Schema<ShipmentItem>(
   {
     lotId: { type: Schema.Types.ObjectId, ref: "InboundLot", required: true },
     qty: { type: Number, required: true, min: 1 },
-    senderCharge: { type: moneySchema, default: null },
   },
   { _id: true }
 );
@@ -152,7 +150,6 @@ shipmentSchema.methods.toClient = function toClient() {
       id: it._id.toString(),
       lotId: it.lotId.toString(),
       qty: it.qty,
-      senderCharge: it.senderCharge,
     })),
     statusHistory: this.statusHistory.map((e: StatusEvent) => ({
       fromStatus: e.fromStatus,
