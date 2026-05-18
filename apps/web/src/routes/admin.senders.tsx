@@ -14,12 +14,12 @@ import { Users } from "lucide-react";
 import { SenderFormDialog } from "@/components/SenderFormDialog";
 import { sendersApi } from "@/lib/api/senders";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 export const Route = createFileRoute("/admin/senders")({
-  beforeLoad: requireRole("admin", "operator"),
+  beforeLoad: requirePermission("senders:write"),
   component: SendersPage,
 });
 

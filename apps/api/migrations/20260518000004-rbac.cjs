@@ -148,11 +148,7 @@ module.exports = {
 
     // 5. Re-index users for the new field shape.
     await db.collection("users").createIndex({ orgId: 1, roleId: 1 });
-    try {
-      await db.collection("users").dropIndex("orgId_1_role_1");
-    } catch {
-      // index might not exist on fresh installs
-    }
+    await dropIndexIfExists(db, "users", "orgId_1_role_1");
   },
 
   async down(db) {
@@ -170,17 +166,30 @@ module.exports = {
         .collection("users")
         .updateOne({ _id: u._id }, { $set: { role: name }, $unset: { roleId: "" } });
     }
-    await db
-      .collection("roles")
-      .drop()
-      .catch(() => {});
-    await db
-      .collection("permissions")
-      .drop()
-      .catch(() => {});
+    await dropCollectionIfExists(db, "roles");
+    await dropCollectionIfExists(db, "permissions");
     await db.collection("users").createIndex({ orgId: 1, role: 1 });
-    try {
-      await db.collection("users").dropIndex("orgId_1_roleId_1");
-    } catch {}
+    await dropIndexIfExists(db, "users", "orgId_1_roleId_1");
   },
 };
+
+// Discriminate "the thing wasn't there to drop" (fine) from real failures
+// like Unauthorized/NotMaster/WriteConflict — those must propagate so a
+// half-failed migration shows up red instead of pretending to succeed.
+async function dropIndexIfExists(db, collection, indexName) {
+  try {
+    await db.collection(collection).dropIndex(indexName);
+  } catch (e) {
+    if (e && (e.codeName === "IndexNotFound" || e.code === 27)) return;
+    throw e;
+  }
+}
+
+async function dropCollectionIfExists(db, collection) {
+  try {
+    await db.collection(collection).drop();
+  } catch (e) {
+    if (e && (e.codeName === "NamespaceNotFound" || e.code === 26)) return;
+    throw e;
+  }
+}

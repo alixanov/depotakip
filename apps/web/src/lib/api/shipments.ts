@@ -50,16 +50,19 @@ export const shipmentsApi = {
       method: "PATCH",
       body: input,
     }),
-  waybillPdfUrl: (id: string) => `${API_BASE}/shipments/${id}/waybill.pdf`,
+  waybillPdfUrl: (id: string, lang?: string) =>
+    `${API_BASE}/shipments/${id}/waybill.pdf${lang ? `?lang=${lang}` : ""}`,
   publicTrack: (token: string) =>
     request<PublicTrackInfo>(`/public/track/${token}`, { auth: false }),
 };
 
 export async function downloadWaybillPdf(shipmentId: string, shortCode: string): Promise<void> {
   const { toast } = await import("sonner");
+  const { useUiStore } = await import("@/stores/ui");
   try {
     const token = useAuthStore.getState().accessToken;
-    const res = await fetch(shipmentsApi.waybillPdfUrl(shipmentId), {
+    const lang = useUiStore.getState().lang;
+    const res = await fetch(shipmentsApi.waybillPdfUrl(shipmentId, lang), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     });

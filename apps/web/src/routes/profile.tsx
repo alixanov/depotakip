@@ -60,7 +60,7 @@ function ProfilePage() {
             <Field label={t("profile:info_name")}>{user.fullName}</Field>
             <Field label={t("profile:info_email")}>{user.email}</Field>
             <Field label={t("profile:info_phone")}>{user.phone || "—"}</Field>
-            <Field label={t("profile:info_role")}>{user.role}</Field>
+            <Field label={t("profile:info_role")}>{user.role.name}</Field>
           </dl>
         </CardContent>
       </Card>

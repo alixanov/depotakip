@@ -92,6 +92,10 @@ const envSchema = z.object({
   LOT_PHOTO_MAX_COUNT: z.coerce.number().int().positive().default(10),
   // Presigned GET URL TTL — TZ §9 mandates 1 hour.
   LOT_PHOTO_PRESIGNED_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
+  // Branding — used as the org name printed on every PDF document
+  // (receipt, waybill, payment receipt) and in their `author` metadata.
+  ORG_NAME: z.string().default("Sadiya Kargo"),
 });
 
 const parsed = envSchema.safeParse(process.env);

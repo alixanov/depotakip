@@ -1,39 +1,29 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { createCarrierSchema, type Carrier, type CreateCarrierInput } from "@sadiyakargo/shared";
+import { type Carrier } from "@sadiyakargo/shared";
 import { Plus, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable, PaginationBar, type Column } from "@/components/ui/data-table";
-import { FieldError, FormError } from "@/components/ui/form-error";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CarrierFormDialog } from "@/components/CarrierFormDialog";
 import { carriersApi } from "@/lib/api/carriers";
-import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 export const Route = createFileRoute("/admin/carriers")({
-  beforeLoad: requireRole("admin", "operator"),
+  beforeLoad: requirePermission("carriers:write"),
   component: CarriersPage,
 });
 
 function CarriersPage() {
-  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = useAuthStore((s) => !!s.user?.role.permissions.includes("carriers:delete"));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -72,7 +62,7 @@ function CarriersPage() {
       key: "actions",
       header: "",
       cell: (c) =>
-        role === "admin" ? (
+        canDelete ? (
           <Button
             variant="ghost"
             size="icon"
@@ -129,7 +119,7 @@ function CarriersPage() {
                     </p>
                   )}
                 </div>
-                {role === "admin" && (
+                {canDelete && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -158,7 +148,7 @@ function CarriersPage() {
         </CardContent>
       </Card>
 
-      <CreateCarrierDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CarrierFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       <ConfirmDialog
         open={!!confirmId}
@@ -174,85 +164,5 @@ function CarriersPage() {
         }}
       />
     </div>
-  );
-}
-
-function CreateCarrierDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const qc = useQueryClient();
-  const [serverError, setServerError] = useState("");
-  const { t } = useTranslation();
-  const form = useForm<CreateCarrierInput>({
-    resolver: zodResolver(createCarrierSchema),
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      phone: "",
-      deliveryAddressTr: "",
-      notes: "",
-    },
-  });
-  const handleApiError = useApiFormErrors(form);
-
-  const create = useMutation({
-    mutationFn: (data: CreateCarrierInput) => carriersApi.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["carriers"] });
-      onOpenChange(false);
-      form.reset();
-    },
-    onError: (err) => setServerError(handleApiError(err)),
-  });
-
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialogContent>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("admin:btn_new_carrier")}</ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        <form
-          onSubmit={form.handleSubmit((d) => {
-            setServerError("");
-            create.mutate(d);
-          })}
-          className="space-y-3"
-        >
-          <FormError>{serverError}</FormError>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t("admin:col_first_name")}</Label>
-              <Input {...form.register("firstName")} autoFocus autoComplete="given-name" />
-              <FieldError>{form.formState.errors.firstName?.message}</FieldError>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t("admin:col_last_name")}</Label>
-              <Input {...form.register("lastName")} autoComplete="family-name" />
-              <FieldError>{form.formState.errors.lastName?.message}</FieldError>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_phone")}</Label>
-            <Input {...form.register("phone")} placeholder="+90..." autoComplete="tel" />
-            <FieldError>{form.formState.errors.phone?.message}</FieldError>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_addr_delivery")}</Label>
-            <Input {...form.register("deliveryAddressTr")} autoComplete="street-address" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_notes")}</Label>
-            <Input {...form.register("notes")} />
-          </div>
-          <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
-            {t("create")}
-          </Button>
-        </form>
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
   );
 }

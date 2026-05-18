@@ -5,14 +5,7 @@ export interface RoleDoc extends Document {
   orgId: Types.ObjectId;
   name: string;
   description: string;
-  /**
-   * Flat list of permission keys (strings). Mirrors the `permissions.key`
-   * column rather than ObjectId references so that permissions can be deleted
-   * without cascading rewrites — `requirePermission` just checks string
-   * membership.
-   */
   permissions: string[];
-  /** Seeded by migration; cannot be deleted via the admin UI. */
   isSystem: boolean;
   createdAt: Date;
   updatedAt: Date;

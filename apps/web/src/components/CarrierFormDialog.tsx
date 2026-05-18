@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import { createSenderSchema, type CreateSenderInput, type Sender } from "@sadiyakargo/shared";
+import { createCarrierSchema, type Carrier, type CreateCarrierInput } from "@sadiyakargo/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,32 +14,38 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
 import { FieldError, FormError } from "@/components/ui/form-error";
-import { Checkbox } from "@/components/ui/checkbox";
-import { sendersApi } from "@/lib/api/senders";
+import { carriersApi } from "@/lib/api/carriers";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 
-interface SenderFormDialogProps {
+interface CarrierFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called after a successful POST /senders — used by callers that need to
-   *  auto-select the new sender (e.g. inline creation from the Receive form). */
-  onCreated?: (sender: Sender) => void;
+  /** Called after a successful POST /carriers — lets callers auto-select the
+   *  freshly-created carrier (e.g. inline creation from the Shipment form). */
+  onCreated?: (carrier: Carrier) => void;
 }
 
-/** Reusable "new sender" dialog. Lives outside admin.senders.tsx so the
- *  Receive-lot flow can drop it in next to the sender Combobox. */
-export function SenderFormDialog({ open, onOpenChange, onCreated }: SenderFormDialogProps) {
+/** Reusable "new carrier" dialog. Lives outside admin.carriers.tsx so the
+ *  Shipment-create flow can drop it in next to the carrier Combobox — same
+ *  pattern as SenderFormDialog. */
+export function CarrierFormDialog({ open, onOpenChange, onCreated }: CarrierFormDialogProps) {
   const qc = useQueryClient();
   const [serverError, setServerError] = useState("");
   const { t } = useTranslation();
-  const form = useForm<CreateSenderInput>({
-    resolver: zodResolver(createSenderSchema),
-    defaultValues: { fullName: "", phone: "", address: "", notes: "", isSelf: false },
+  const form = useForm<CreateCarrierInput>({
+    resolver: zodResolver(createCarrierSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      deliveryAddressTr: "",
+      notes: "",
+    },
   });
   const handleApiError = useApiFormErrors(form);
 
-  // Clear stale form/error state every time the dialog re-opens so a previous
-  // failed attempt doesn't pre-fill the inputs.
+  // Clear stale state on every re-open so a previous failed attempt doesn't
+  // pre-fill the inputs the next time the operator opens the dialog.
   useEffect(() => {
     if (open) {
       setServerError("");
@@ -48,10 +54,10 @@ export function SenderFormDialog({ open, onOpenChange, onCreated }: SenderFormDi
   }, [open, form]);
 
   const create = useMutation({
-    mutationFn: (data: CreateSenderInput) => sendersApi.create(data),
-    onSuccess: (sender) => {
-      qc.invalidateQueries({ queryKey: ["senders"] });
-      onCreated?.(sender);
+    mutationFn: (data: CreateCarrierInput) => carriersApi.create(data),
+    onSuccess: (carrier) => {
+      qc.invalidateQueries({ queryKey: ["carriers"] });
+      onCreated?.(carrier);
       onOpenChange(false);
     },
     onError: (err) => setServerError(handleApiError(err)),
@@ -61,7 +67,7 @@ export function SenderFormDialog({ open, onOpenChange, onCreated }: SenderFormDi
     <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>{t("admin:btn_new_sender")}</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>{t("admin:btn_new_carrier")}</ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         <form
           onSubmit={form.handleSubmit((d) => {
@@ -71,28 +77,31 @@ export function SenderFormDialog({ open, onOpenChange, onCreated }: SenderFormDi
           className="space-y-3"
         >
           <FormError>{serverError}</FormError>
-          <div className="space-y-1.5">
-            <Label>{t("admin:col_name")}</Label>
-            <Input {...form.register("fullName")} autoFocus autoComplete="name" />
-            <FieldError>{form.formState.errors.fullName?.message}</FieldError>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t("admin:col_first_name")}</Label>
+              <Input {...form.register("firstName")} autoFocus autoComplete="given-name" />
+              <FieldError>{form.formState.errors.firstName?.message}</FieldError>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("admin:col_last_name")}</Label>
+              <Input {...form.register("lastName")} autoComplete="family-name" />
+              <FieldError>{form.formState.errors.lastName?.message}</FieldError>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>{t("admin:col_phone")}</Label>
-            <Input {...form.register("phone")} placeholder="+998..." autoComplete="tel" />
+            <Input {...form.register("phone")} placeholder="+90..." autoComplete="tel" />
             <FieldError>{form.formState.errors.phone?.message}</FieldError>
           </div>
           <div className="space-y-1.5">
-            <Label>{t("admin:col_address")}</Label>
-            <Input {...form.register("address")} autoComplete="street-address" />
+            <Label>{t("admin:col_addr_delivery")}</Label>
+            <Input {...form.register("deliveryAddressTr")} autoComplete="street-address" />
           </div>
           <div className="space-y-1.5">
             <Label>{t("admin:col_notes")}</Label>
             <Input {...form.register("notes")} />
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <Checkbox {...form.register("isSelf")} />
-            {t("admin:isSelf_label")}
-          </label>
           <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
             {t("create")}
           </Button>

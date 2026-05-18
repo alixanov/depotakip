@@ -13,6 +13,7 @@ import {
   putObject,
 } from "../../lib/storage.js";
 import { Sender } from "../senders/sender.model.js";
+import { Shipment } from "../shipments/shipment.model.js";
 import { InboundLot } from "./lot.model.js";
 
 // Photo magic-byte allow-list. TZ §9: never trust the Content-Type header —
@@ -416,4 +417,36 @@ export async function stockBySender(orgId: string): Promise<StockBreakdownRow[]>
     totalAvailable: r.totalAvailable,
     lots: r.lots,
   }));
+}
+
+/**
+ * Drill-down: every shipment that pulled stock from this lot, with the qty
+ * taken in that shipment, the carrier id, recipient, and current status. Used
+ * by the depo UI to answer "when / to whom did this lot go out?". Tenant +
+ * soft-delete checks are explicit so a forged lotId can't escape org scope.
+ */
+export async function shipmentsForLot(orgId: string, lotId: string) {
+  const lot = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }));
+  if (!lot) throw notFound("Parti bulunamadı");
+
+  const shipments = await Shipment.find(
+    tenantFilter(orgId, { "items.lotId": new Types.ObjectId(lotId) })
+  ).sort({ shipmentDate: -1 });
+
+  // Project only the matching item's qty — a shipment may reference multiple
+  // lots, but for this view we want the slice tied to lotId.
+  return shipments.map((s) => {
+    const item = s.items.find((it) => it.lotId.toString() === lotId);
+    return {
+      shipmentId: s._id.toString(),
+      shortCode: s.shortCode,
+      shipmentDate: s.shipmentDate.toISOString(),
+      status: s.status,
+      carrierId: s.carrierId.toString(),
+      qty: item?.qty ?? 0,
+      recipient: s.recipient
+        ? { name: s.recipient.name, phone: s.recipient.phone, addressTr: s.recipient.addressTr }
+        : null,
+    };
+  });
 }

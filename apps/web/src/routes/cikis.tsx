@@ -25,6 +25,8 @@ import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requirePermission } from "@/lib/guards";
 import { formatDate, formatMoneyObject, isoDateOnly, toMinor } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import { CarrierFormDialog } from "@/components/CarrierFormDialog";
 
 /**
  * Form values use *display* units (e.g. 50.00 USD). Conversion to minor units
@@ -67,7 +69,9 @@ export const Route = createFileRoute("/cikis")({
 
 function CreateShipmentPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [serverError, setServerError] = useState("");
+  const [carrierDialogOpen, setCarrierDialogOpen] = useState(false);
   const { t } = useTranslation();
   // Idempotency-Key: stable for the lifetime of this form. If the user
   // double-submits or TanStack Query retries on network failure, the backend
@@ -159,172 +163,231 @@ function CreateShipmentPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("cikis:title")}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* pb-24 on mobile reserves space for the sticky submit bar at bottom-16
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("cikis:title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* pb-24 on mobile reserves space for the sticky submit bar at bottom-16
             (above the bottom-nav). Without it, the last field is permanently
             occluded when the form is short. */}
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-24 md:pb-4">
-          <FormError>{serverError}</FormError>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-24 md:pb-4">
+            <FormError>{serverError}</FormError>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>{t("cikis:carrier")}</Label>
-              <Controller
-                name="carrierId"
-                control={form.control}
-                render={({ field }) => (
-                  <Combobox
-                    options={carriersQuery.data?.data ?? []}
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    getValue={(c) => c.id}
-                    getLabel={(c) => `${c.firstName} ${c.lastName}`}
-                    getSearchKeys={(c) => [c.phone]}
-                    renderOption={(c) => (
-                      <div className="flex min-w-0 items-baseline justify-between gap-2">
-                        <span className="truncate font-medium">
-                          {c.firstName} {c.lastName}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {c.phone}
-                        </span>
-                      </div>
-                    )}
-                    placeholder={t("select")}
-                    aria-invalid={!!form.formState.errors.carrierId}
-                  />
-                )}
-              />
-              <FieldError>{form.formState.errors.carrierId?.message}</FieldError>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{t("cikis:carrier")}</Label>
+                <Controller
+                  name="carrierId"
+                  control={form.control}
+                  render={({ field }) => (
+                    <Combobox
+                      options={carriersQuery.data?.data ?? []}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      getValue={(c) => c.id}
+                      getLabel={(c) => `${c.firstName} ${c.lastName}`}
+                      getSearchKeys={(c) => [c.phone]}
+                      renderOption={(c) => (
+                        <div className="flex min-w-0 items-baseline justify-between gap-2">
+                          <span className="truncate font-medium">
+                            {c.firstName} {c.lastName}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            {c.phone}
+                          </span>
+                        </div>
+                      )}
+                      placeholder={t("select")}
+                      aria-invalid={!!form.formState.errors.carrierId}
+                      footer={
+                        <button
+                          type="button"
+                          onClick={() => setCarrierDialogOpen(true)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-primary hover:bg-primary-soft"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {t("admin:btn_new_carrier")}
+                        </button>
+                      }
+                    />
+                  )}
+                />
+                <FieldError>{form.formState.errors.carrierId?.message}</FieldError>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{t("cikis:shipmentDate")}</Label>
+                <Controller
+                  name="shipmentDate"
+                  control={form.control}
+                  render={({ field }) => (
+                    <DatePicker
+                      value={field.value}
+                      onChange={(v) => field.onChange(v ?? isoDateOnly())}
+                    />
+                  )}
+                />
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>{t("cikis:shipmentDate")}</Label>
-              <Controller
-                name="shipmentDate"
-                control={form.control}
-                render={({ field }) => (
-                  <DatePicker
-                    value={field.value}
-                    onChange={(v) => field.onChange(v ?? isoDateOnly())}
-                  />
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Recipient (optional) — collapsed by default because most shipments
+            {/* Recipient (optional) — collapsed by default because most shipments
               go to a repeat carrier route and the fields are noise. The toggle
               row keeps the section discoverable without occupying real-estate. */}
-          <div className="rounded-lg border">
-            <button
-              type="button"
-              onClick={() => setRecipientOpen((v) => !v)}
-              aria-expanded={recipientOpen}
-              aria-controls="recipient-fields"
-              className={cn(
-                "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left",
-                "text-xs font-semibold uppercase tracking-wide text-muted-foreground",
-                "transition-colors hover:bg-muted/50",
-                recipientOpen && "border-b"
-              )}
-            >
-              <span className="flex items-center gap-2">
-                {recipientOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <UserPlus className="h-3.5 w-3.5" />
-                )}
-                {t("cikis:recipient_legend")}
-              </span>
-              {!recipientOpen && (
-                <span className="font-normal normal-case text-muted-foreground/70">
-                  {t("cikis:recipient_add_hint")}
-                </span>
-              )}
-            </button>
-            {recipientOpen && (
-              <div id="recipient-fields" className="grid gap-3 p-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_name")}</Label>
-                  <Input {...form.register("recipient.name")} autoComplete="name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_phone")}</Label>
-                  <Input
-                    {...form.register("recipient.phone")}
-                    placeholder="+90..."
-                    autoComplete="tel"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>{t("cikis:recipient_addressTr")}</Label>
-                  <Input {...form.register("recipient.addressTr")} autoComplete="street-address" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>{t("cikis:items_label")}</Label>
-              <Button
+            <div className="rounded-lg border">
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  append({
-                    lotId: "",
-                    qty: 1,
-                    senderChargeAmount: undefined,
-                    senderChargeCurrency: "USD",
-                  })
-                }
+                onClick={() => setRecipientOpen((v) => !v)}
+                aria-expanded={recipientOpen}
+                aria-controls="recipient-fields"
+                className={cn(
+                  "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left",
+                  "text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                  "transition-colors hover:bg-muted/50",
+                  recipientOpen && "border-b"
+                )}
               >
-                <Plus className="mr-1 h-3 w-3" />
-                {t("cikis:items_add")}
-              </Button>
+                <span className="flex items-center gap-2">
+                  {recipientOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <UserPlus className="h-3.5 w-3.5" />
+                  )}
+                  {t("cikis:recipient_legend")}
+                </span>
+                {!recipientOpen && (
+                  <span className="font-normal normal-case text-muted-foreground/70">
+                    {t("cikis:recipient_add_hint")}
+                  </span>
+                )}
+              </button>
+              {recipientOpen && (
+                <div id="recipient-fields" className="grid gap-3 p-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label>{t("cikis:recipient_name")}</Label>
+                    <Input {...form.register("recipient.name")} autoComplete="name" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("cikis:recipient_phone")}</Label>
+                    <Input
+                      {...form.register("recipient.phone")}
+                      placeholder="+90..."
+                      autoComplete="tel"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("cikis:recipient_addressTr")}</Label>
+                    <Input
+                      {...form.register("recipient.addressTr")}
+                      autoComplete="street-address"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            {fields.map((field, idx) => {
-              // Look up the selected lot so we can surface its remaining qty
-              // as a hint and clamp the NumberInput before the server sees
-              // an over-allocation (saves a 409 round-trip).
-              const lotId = form.watch(`items.${idx}.lotId`);
-              const lot = lotId ? lotsQuery.data?.data.find((l) => l.id === lotId) : undefined;
-              const qty = form.watch(`items.${idx}.qty`) ?? 0;
-              const overAvailable = !!lot && qty > lot.qtyAvailable;
-              return (
-                <div key={field.id} className="rounded-md border p-3">
-                  {/* Mobile (< sm): lot + qty stack vertically with delete at top-right.
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>{t("cikis:items_label")}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    append({
+                      lotId: "",
+                      qty: 1,
+                      senderChargeAmount: undefined,
+                      senderChargeCurrency: "USD",
+                    })
+                  }
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  {t("cikis:items_add")}
+                </Button>
+              </div>
+              {fields.map((field, idx) => {
+                // Look up the selected lot so we can surface its remaining qty
+                // as a hint and clamp the NumberInput before the server sees
+                // an over-allocation (saves a 409 round-trip).
+                const lotId = form.watch(`items.${idx}.lotId`);
+                const lot = lotId ? lotsQuery.data?.data.find((l) => l.id === lotId) : undefined;
+                const qty = form.watch(`items.${idx}.qty`) ?? 0;
+                const overAvailable = !!lot && qty > lot.qtyAvailable;
+                return (
+                  <div key={field.id} className="rounded-md border p-3">
+                    {/* Mobile (< sm): lot + qty stack vertically with delete at top-right.
                       Desktop: 3-col grid stays as before. The min-w-0 wrapper
                       keeps the Combobox from forcing horizontal scroll on 375. */}
-                  <div className="grid grid-cols-[1fr_44px] items-start gap-2 sm:grid-cols-[1fr_120px_40px]">
-                    <div className="min-w-0">
-                      <Controller
-                        name={`items.${idx}.lotId`}
-                        control={form.control}
-                        render={({ field }) => (
-                          <Combobox
-                            options={lotsQuery.data?.data ?? []}
-                            value={field.value || ""}
-                            onChange={field.onChange}
-                            getValue={(l) => l.id}
-                            getLabel={(l) => l.label || `#${l.id.slice(-6)}`}
-                            getSearchKeys={(l) => [
-                              l.label,
-                              senderName(l.senderId),
-                              formatDate(l.receivedAt),
-                              String(l.qtyAvailable),
-                            ]}
-                            renderOption={(l) => (
-                              // 36×36 thumbnail · label+sender (flex-1) · price+qty.
-                              <div className="flex min-w-0 items-center gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                                  {l.firstPhotoUrl ? (
+                    <div className="grid grid-cols-[1fr_44px] items-start gap-2 sm:grid-cols-[1fr_120px_40px]">
+                      <div className="min-w-0">
+                        <Controller
+                          name={`items.${idx}.lotId`}
+                          control={form.control}
+                          render={({ field }) => (
+                            <Combobox
+                              options={lotsQuery.data?.data ?? []}
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              getValue={(l) => l.id}
+                              getLabel={(l) => l.label || `#${l.id.slice(-6)}`}
+                              getSearchKeys={(l) => [
+                                l.label,
+                                senderName(l.senderId),
+                                formatDate(l.receivedAt),
+                                String(l.qtyAvailable),
+                              ]}
+                              renderOption={(l) => (
+                                // 36×36 thumbnail · label+sender (flex-1) · price+qty.
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                                    {l.firstPhotoUrl ? (
+                                      <img
+                                        src={l.firstPhotoUrl}
+                                        alt=""
+                                        loading="lazy"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = "none";
+                                        }}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <ImageIcon
+                                        className="h-4 w-4 text-muted-foreground/60"
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">
+                                      {l.label || (
+                                        <span className="font-mono text-muted-foreground">
+                                          #{l.id.slice(-6)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {senderName(l.senderId)} · {formatDate(l.receivedAt)}
+                                    </div>
+                                  </div>
+                                  <div className="flex shrink-0 flex-col items-end text-xs">
+                                    {l.unitPrice ? (
+                                      <span className="tabular-nums">
+                                        {formatMoneyObject(l.unitPrice)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">—</span>
+                                    )}
+                                    <span className="tabular-nums text-muted-foreground">
+                                      {l.qtyAvailable} {t("depo:form_qty").toLowerCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                              renderSelected={(l) => (
+                                <span className="flex min-w-0 items-center gap-2">
+                                  {l.firstPhotoUrl && (
                                     <img
                                       src={l.firstPhotoUrl}
                                       alt=""
@@ -332,190 +395,159 @@ function CreateShipmentPage() {
                                       onError={(e) => {
                                         e.currentTarget.style.display = "none";
                                       }}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <ImageIcon
-                                      className="h-4 w-4 text-muted-foreground/60"
-                                      aria-hidden="true"
+                                      className="h-5 w-5 shrink-0 rounded object-cover"
                                     />
                                   )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-medium">
-                                    {l.label || (
-                                      <span className="font-mono text-muted-foreground">
-                                        #{l.id.slice(-6)}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="truncate text-xs text-muted-foreground">
-                                    {senderName(l.senderId)} · {formatDate(l.receivedAt)}
-                                  </div>
-                                </div>
-                                <div className="flex shrink-0 flex-col items-end text-xs">
-                                  {l.unitPrice ? (
-                                    <span className="tabular-nums">
-                                      {formatMoneyObject(l.unitPrice)}
+                                  <span className="truncate">
+                                    {l.label || `#${l.id.slice(-6)}`}{" "}
+                                    <span className="text-muted-foreground">
+                                      · {senderName(l.senderId)} · {l.qtyAvailable}{" "}
+                                      {t("depo:form_qty").toLowerCase()}
                                     </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                  <span className="tabular-nums text-muted-foreground">
-                                    {l.qtyAvailable} {t("depo:form_qty").toLowerCase()}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            renderSelected={(l) => (
-                              <span className="flex min-w-0 items-center gap-2">
-                                {l.firstPhotoUrl && (
-                                  <img
-                                    src={l.firstPhotoUrl}
-                                    alt=""
-                                    loading="lazy"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none";
-                                    }}
-                                    className="h-5 w-5 shrink-0 rounded object-cover"
-                                  />
-                                )}
-                                <span className="truncate">
-                                  {l.label || `#${l.id.slice(-6)}`}{" "}
-                                  <span className="text-muted-foreground">
-                                    · {senderName(l.senderId)} · {l.qtyAvailable}{" "}
-                                    {t("depo:form_qty").toLowerCase()}
                                   </span>
                                 </span>
-                              </span>
-                            )}
-                            placeholder={t("cikis:items_select")}
-                            aria-invalid={!!form.formState.errors.items?.[idx]?.lotId}
-                          />
-                        )}
-                      />
-                      <FieldError>{form.formState.errors.items?.[idx]?.lotId?.message}</FieldError>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={fields.length === 1}
-                      onClick={() => remove(idx)}
-                      aria-label={t("cikis:items_remove")}
-                      className="sm:order-3"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                    <div className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
-                      <Controller
-                        name={`items.${idx}.qty`}
-                        control={form.control}
-                        render={({ field }) => (
-                          <NumberInput
-                            value={field.value}
-                            onChange={field.onChange}
-                            min={1}
-                            max={lot?.qtyAvailable}
-                            aria-label={t("depo:form_qty")}
-                            aria-invalid={overAvailable}
-                          />
-                        )}
-                      />
-                      {lot && (
-                        <p
-                          className={
-                            overAvailable
-                              ? "mt-0.5 text-[11px] font-semibold text-destructive"
-                              : "mt-0.5 text-[11px] text-muted-foreground"
-                          }
-                        >
-                          {overAvailable
-                            ? t("cikis:over_available", { max: lot.qtyAvailable })
-                            : t("cikis:max_available", { max: lot.qtyAvailable })}
-                        </p>
-                      )}
-                      <FieldError>{form.formState.errors.items?.[idx]?.qty?.message}</FieldError>
-                    </div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-[1fr_120px] gap-2 sm:grid-cols-[1fr_120px_40px]">
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">
-                        {t("cikis:sender_charge")}
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        placeholder="0.00"
-                        {...form.register(`items.${idx}.senderChargeAmount`, {
-                          setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)),
-                        })}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">
-                        {t("cikis:currency")}
-                      </Label>
-                      <select
-                        {...form.register(`items.${idx}.senderChargeCurrency`)}
-                        className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                              )}
+                              placeholder={t("cikis:items_select")}
+                              aria-invalid={!!form.formState.errors.items?.[idx]?.lotId}
+                            />
+                          )}
+                        />
+                        <FieldError>
+                          {form.formState.errors.items?.[idx]?.lotId?.message}
+                        </FieldError>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={fields.length === 1}
+                        onClick={() => remove(idx)}
+                        aria-label={t("cikis:items_remove")}
+                        className="sm:order-3"
                       >
-                        {CURRENCIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                      <div className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+                        <Controller
+                          name={`items.${idx}.qty`}
+                          control={form.control}
+                          render={({ field }) => (
+                            <NumberInput
+                              value={field.value}
+                              onChange={field.onChange}
+                              min={1}
+                              max={lot?.qtyAvailable}
+                              aria-label={t("depo:form_qty")}
+                              aria-invalid={overAvailable}
+                            />
+                          )}
+                        />
+                        {lot && (
+                          <p
+                            className={
+                              overAvailable
+                                ? "mt-0.5 text-[11px] font-semibold text-destructive"
+                                : "mt-0.5 text-[11px] text-muted-foreground"
+                            }
+                          >
+                            {overAvailable
+                              ? t("cikis:over_available", { max: lot.qtyAvailable })
+                              : t("cikis:max_available", { max: lot.qtyAvailable })}
+                          </p>
+                        )}
+                        <FieldError>{form.formState.errors.items?.[idx]?.qty?.message}</FieldError>
+                      </div>
                     </div>
-                    <div />
+                    <div className="mt-2 grid grid-cols-[1fr_120px] gap-2 sm:grid-cols-[1fr_120px_40px]">
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t("cikis:sender_charge")}
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          placeholder="0.00"
+                          {...form.register(`items.${idx}.senderChargeAmount`, {
+                            setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)),
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          {t("cikis:currency")}
+                        </Label>
+                        <select
+                          {...form.register(`items.${idx}.senderChargeCurrency`)}
+                          className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                        >
+                          {CURRENCIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div />
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            <FieldError>
-              {typeof form.formState.errors.items?.message === "string"
-                ? form.formState.errors.items.message
-                : undefined}
-            </FieldError>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>{t("cikis:carrier_fee")}</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                placeholder="0.00"
-                {...form.register("carrierFee.amount", { valueAsNumber: true })}
-              />
-              <FieldError>{form.formState.errors.carrierFee?.amount?.message}</FieldError>
+                );
+              })}
+              <FieldError>
+                {typeof form.formState.errors.items?.message === "string"
+                  ? form.formState.errors.items.message
+                  : undefined}
+              </FieldError>
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>{t("cikis:carrier_fee")}</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder="0.00"
+                  {...form.register("carrierFee.amount", { valueAsNumber: true })}
+                />
+                <FieldError>{form.formState.errors.carrierFee?.amount?.message}</FieldError>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("cikis:currency_label")}</Label>
+                <select
+                  {...form.register("carrierFee.currency")}
+                  className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
-              <Label>{t("cikis:currency_label")}</Label>
-              <select
-                {...form.register("carrierFee.currency")}
-                className="h-11 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <Label>{t("cikis:notes")}</Label>
+              <Input {...form.register("notes")} />
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>{t("cikis:notes")}</Label>
-            <Input {...form.register("notes")} />
-          </div>
+            <StickySubmitBar form={form} isSubmitting={form.formState.isSubmitting} />
+          </form>
+        </CardContent>
+      </Card>
 
-          <StickySubmitBar form={form} isSubmitting={form.formState.isSubmitting} />
-        </form>
-      </CardContent>
-    </Card>
+      <CarrierFormDialog
+        open={carrierDialogOpen}
+        onOpenChange={setCarrierDialogOpen}
+        onCreated={(carrier) => {
+          // Auto-select the freshly-created carrier + invalidate the cache so
+          // subsequent opens of the Combobox see the new entry.
+          form.setValue("carrierId", carrier.id, { shouldValidate: true });
+          qc.invalidateQueries({ queryKey: ["carriers"] });
+        }}
+      />
+    </>
   );
 }
 

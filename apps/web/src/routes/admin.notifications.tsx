@@ -30,7 +30,7 @@ import { Bell } from "lucide-react";
 import { notificationsApi, type LogRow, type TemplateRow } from "@/lib/api/notifications";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
 import type { NotificationTemplateKey } from "@sadiyakargo/shared";
@@ -44,7 +44,7 @@ function templateLabel(t: (k: string) => string, key: NotificationTemplateKey): 
 }
 
 export const Route = createFileRoute("/admin/notifications")({
-  beforeLoad: requireRole("admin"),
+  beforeLoad: requirePermission("notifications:manage"),
   component: NotificationsPage,
 });
 

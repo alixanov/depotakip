@@ -1,5 +1,5 @@
 import { redirect } from "@tanstack/react-router";
-import type { Role } from "@sadiyakargo/shared";
+import type { PermissionKey } from "@sadiyakargo/shared";
 import { useAuthStore } from "@/stores/auth";
 
 interface GuardCtx {
@@ -14,14 +14,33 @@ export function requireAuth({ location }: GuardCtx): void {
   }
 }
 
-/** Variant of `requireAuth` that also enforces a role allow-list. */
-export function requireRole(...roles: Role[]) {
+/**
+ * Route-level guard for pages that require one or more permissions. AND-semantics.
+ * Redirects to / when the user is signed in but lacks the permission, so
+ * admin-only routes don't show a generic 404 to viewers.
+ */
+export function requirePermission(...required: PermissionKey[]) {
   return ({ location }: GuardCtx): void => {
     const { user } = useAuthStore.getState();
     if (!user) {
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
-    if (!roles.includes(user.role)) {
+    for (const perm of required) {
+      if (!user.role.permissions.includes(perm)) {
+        throw redirect({ to: "/" });
+      }
+    }
+  };
+}
+
+/** OR-semantics — at least one permission must be granted. */
+export function requireAnyPermission(...required: PermissionKey[]) {
+  return ({ location }: GuardCtx): void => {
+    const { user } = useAuthStore.getState();
+    if (!user) {
+      throw redirect({ to: "/login", search: { redirect: location.href } });
+    }
+    if (!required.some((p) => user.role.permissions.includes(p))) {
       throw redirect({ to: "/" });
     }
   };

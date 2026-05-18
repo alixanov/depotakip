@@ -1,6 +1,7 @@
 import type { CreatePermissionInput, UpdatePermissionInput } from "@sadiyakargo/shared";
 import { Types } from "mongoose";
 import { conflict, notFound } from "../../lib/errors.js";
+import { logger } from "../../lib/logger.js";
 import { Permission } from "./permission.model.js";
 import { Role } from "./role.model.js";
 
@@ -42,8 +43,23 @@ export async function remove(id: string) {
   const doc = await Permission.findById(id);
   if (!doc) throw notFound("Yetki bulunamadı");
   if (doc.isSystem) throw conflict("Sistem yetkisi silinemez");
-  // Pull the key out of every role that still grants it so we don't leave
-  // orphaned strings around.
+  // Snapshot affected roles BEFORE pulling so the audit log can describe the
+  // silent privilege downgrade ("role X used to grant 'lots:foo' until perm
+  // <id> was deleted at <ts>"). Without this trail a sudden 403 cascade is
+  // hard to explain in retrospect.
+  const affected = await Role.find({ permissions: doc.key }, { name: 1, orgId: 1, _id: 0 });
   await Role.updateMany({ permissions: doc.key }, { $pull: { permissions: doc.key } });
   await Permission.deleteOne({ _id: new Types.ObjectId(id) });
+  if (affected.length > 0) {
+    logger.warn(
+      {
+        permissionKey: doc.key,
+        affectedRoles: affected.map((r) => ({
+          name: r.name,
+          orgId: r.orgId.toString(),
+        })),
+      },
+      "permission_deleted_with_roles"
+    );
+  }
 }

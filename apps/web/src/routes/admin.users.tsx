@@ -4,13 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
-import {
-  createUserSchema,
-  ROLES,
-  type CreateUserInput,
-  type Role,
-  type User,
-} from "@sadiyakargo/shared";
+import { createUserSchema, type CreateUserInput, type User } from "@sadiyakargo/shared";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FieldError, FormError } from "@/components/ui/form-error";
 import { usersApi } from "@/lib/api/users";
+import { rolesApi } from "@/lib/api/access";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 
 export const Route = createFileRoute("/admin/users")({
-  beforeLoad: requireRole("admin"),
+  beforeLoad: requirePermission("users:manage"),
   component: UsersPage,
 });
 
@@ -39,12 +34,14 @@ function UsersPage() {
     queryFn: () => usersApi.list({ limit: 100 }),
   });
 
-  // Optimistic role/active toggle — flip the cached list immediately, roll
-  // back on failure. Users list is paginated, so we patch any page that
-  // happens to contain the user.
+  // Role catalogue drives both the user form's role select and the inline
+  // per-row role switcher; cached at the page level.
+  const rolesQuery = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const roles = rolesQuery.data ?? [];
+
   type UsersPage = ReturnType<typeof usersApi.list> extends Promise<infer R> ? R : never;
   const updateMutation = useMutation({
-    mutationFn: (args: { id: string; data: { role?: Role; active?: boolean } }) =>
+    mutationFn: (args: { id: string; data: { roleId?: string; active?: boolean } }) =>
       usersApi.update(args.id, args.data),
     onMutate: async ({ id, data }) => {
       await qc.cancelQueries({ queryKey: ["users"] });
@@ -53,7 +50,22 @@ function UsersPage() {
         if (!value) continue;
         qc.setQueryData<UsersPage>(key, {
           ...value,
-          data: value.data.map((u) => (u.id === id ? { ...u, ...data } : u)),
+          data: value.data.map((u) => {
+            if (u.id !== id) return u;
+            const nextRole = data.roleId ? roles.find((r) => r.id === data.roleId) : undefined;
+            return {
+              ...u,
+              active: data.active ?? u.active,
+              role: nextRole
+                ? {
+                    id: nextRole.id,
+                    name: nextRole.name,
+                    isSystem: nextRole.isSystem,
+                    permissions: nextRole.permissions,
+                  }
+                : u.role,
+            };
+          }),
         });
       }
       return { snapshots };
@@ -127,7 +139,6 @@ function UsersPage() {
           )}
           {usersQuery.data && usersQuery.data.data.length > 0 && (
             <>
-              {/* Mobile cards: stack name + email + role select + active toggle + delete. */}
               <ul className="divide-y md:hidden">
                 {usersQuery.data.data.map((u: User) => (
                   <li key={u.id} className="space-y-2 p-4">
@@ -147,18 +158,18 @@ function UsersPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <select
-                        value={u.role}
+                        value={u.role.id}
                         onChange={(e) =>
                           updateMutation.mutate({
                             id: u.id,
-                            data: { role: e.target.value as Role },
+                            data: { roleId: e.target.value },
                           })
                         }
                         className="h-9 rounded-md border bg-background px-2 text-xs"
                       >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
                           </option>
                         ))}
                       </select>
@@ -183,7 +194,6 @@ function UsersPage() {
                 ))}
               </ul>
 
-              {/* Desktop table: unchanged behavior, just hidden on mobile. */}
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-sm">
                   <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -202,18 +212,18 @@ function UsersPage() {
                         <td className="p-3 text-muted-foreground">{u.email}</td>
                         <td className="p-3">
                           <select
-                            value={u.role}
+                            value={u.role.id}
                             onChange={(e) =>
                               updateMutation.mutate({
                                 id: u.id,
-                                data: { role: e.target.value as Role },
+                                data: { roleId: e.target.value },
                               })
                             }
                             className="rounded-md border bg-background px-2 py-1 text-sm"
                           >
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
+                            {roles.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name}
                               </option>
                             ))}
                           </select>
@@ -270,8 +280,6 @@ function UsersPage() {
         }
         confirmLabel={t("admin:delete_user_confirm")}
         destructive
-        // Require operator to retype the email — irreversible (soft-deletes
-        // the user + revokes refresh tokens server-side; no undo path).
         requireType={confirmUser?.email}
         pending={deleteMutation.isPending}
         onConfirm={() => {
@@ -288,9 +296,13 @@ function NewUserForm({ onCreated }: { onCreated: (tempPassword: string) => void 
   const [serverError, setServerError] = useState("");
   const { t } = useTranslation();
 
+  const rolesQuery = useQuery({ queryKey: ["roles"], queryFn: () => rolesApi.list() });
+  const roles = rolesQuery.data ?? [];
+  const defaultRoleId = roles.find((r) => r.name === "operator")?.id ?? roles[0]?.id ?? "";
+
   const form = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { email: "", fullName: "", phone: "", role: "operator" },
+    defaultValues: { email: "", fullName: "", phone: "", roleId: defaultRoleId },
   });
   const handleApiError = useApiFormErrors(form);
 
@@ -299,7 +311,7 @@ function NewUserForm({ onCreated }: { onCreated: (tempPassword: string) => void 
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["users"] });
       onCreated(res.tempPassword);
-      form.reset();
+      form.reset({ email: "", fullName: "", phone: "", roleId: defaultRoleId });
     },
     onError: (err) => {
       setServerError(handleApiError(err));
@@ -338,15 +350,16 @@ function NewUserForm({ onCreated }: { onCreated: (tempPassword: string) => void 
           <div className="space-y-1.5">
             <Label>{t("admin:user_form_role")}</Label>
             <select
-              {...form.register("role")}
+              {...form.register("roleId")}
               className="h-11 w-full rounded-md border bg-background px-3 text-sm"
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
                 </option>
               ))}
             </select>
+            <FieldError>{form.formState.errors.roleId?.message}</FieldError>
           </div>
 
           <div className="sm:col-span-2">

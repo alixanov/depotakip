@@ -7,7 +7,6 @@ export interface PermissionDoc extends Document {
   label: string;
   description: string;
   group: PermissionGroup | null;
-  /** System permissions are seeded by migration and cannot be deleted. */
   isSystem: boolean;
   createdAt: Date;
   updatedAt: Date;

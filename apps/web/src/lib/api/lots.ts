@@ -3,10 +3,12 @@ import type {
   InboundLot,
   PaginatedResponse,
   SignedPhotoUrlResponse,
+  Status,
   UpdateLotInput,
 } from "@sadiyakargo/shared";
 import { API_BASE } from "@/lib/env";
 import { useAuthStore } from "@/stores/auth";
+import { useUiStore } from "@/stores/ui";
 import { request } from "./client";
 
 export interface StockBreakdownRow {
@@ -14,6 +16,17 @@ export interface StockBreakdownRow {
   name: string;
   totalAvailable: number;
   lots: number;
+}
+
+/** Row in the "shipments that drew from this lot" drill-down view. */
+export interface LotShipmentRow {
+  shipmentId: string;
+  shortCode: string;
+  shipmentDate: string;
+  status: Status;
+  carrierId: string;
+  qty: number;
+  recipient: { name: string; phone: string; addressTr: string } | null;
 }
 
 interface ListParams {
@@ -40,7 +53,9 @@ export const lotsApi = {
     request<InboundLot>(`/lots/${id}`, { method: "PATCH", body: input }),
   remove: (id: string) => request<{ ok: true }>(`/lots/${id}`, { method: "DELETE" }),
   stockBySender: () => request<StockBreakdownRow[]>("/lots/stock/by-sender"),
-  receiptPdfUrl: (id: string) => `${API_BASE}/lots/${id}/receipt.pdf`,
+  shipments: (id: string) => request<LotShipmentRow[]>(`/lots/${id}/shipments`),
+  receiptPdfUrl: (id: string, lang?: string) =>
+    `${API_BASE}/lots/${id}/receipt.pdf${lang ? `?lang=${lang}` : ""}`,
 
   uploadPhotos: (lotId: string, files: File[]) => {
     const form = new FormData();
@@ -64,7 +79,8 @@ export async function downloadReceiptPdf(lotId: string): Promise<void> {
   const { toast } = await import("sonner");
   try {
     const token = useAuthStore.getState().accessToken;
-    const res = await fetch(lotsApi.receiptPdfUrl(lotId), {
+    const lang = useUiStore.getState().lang;
+    const res = await fetch(lotsApi.receiptPdfUrl(lotId, lang), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     });

@@ -78,7 +78,40 @@ export interface SystemPermissionDef {
  * permissions added via the admin UI follow the same convention but are not
  * required to map to an actual endpoint — they can serve as feature flags.
  */
-export const SYSTEM_PERMISSIONS: readonly SystemPermissionDef[] = [
+/**
+ * Closed union of every permission key the codebase actually checks. Adds
+ * compile-time typo detection to `requirePermission` / `useCan` / route
+ * guards. Dynamic keys read from the DB (`permissions` collection) are
+ * untyped `string[]`; cast to `PermissionKey` at the boundary if you need
+ * to pass them to a typed helper.
+ */
+export type PermissionKey =
+  | "lots:read"
+  | "lots:write"
+  | "lots:delete"
+  | "lots:photos:delete"
+  | "shipments:read"
+  | "shipments:write"
+  | "shipments:cancel"
+  | "transactions:read"
+  | "transactions:write"
+  | "exchange_rates:read"
+  | "exchange_rates:manage"
+  | "senders:read"
+  | "senders:write"
+  | "senders:delete"
+  | "carriers:read"
+  | "carriers:write"
+  | "carriers:delete"
+  | "reports:read"
+  | "users:manage"
+  | "roles:manage"
+  | "permissions:manage"
+  | "notifications:read"
+  | "notifications:manage"
+  | "audit:read";
+
+export const SYSTEM_PERMISSIONS: readonly (SystemPermissionDef & { key: PermissionKey })[] = [
   // — warehouse
   { key: "lots:read", group: "warehouse", label: "Партии — просмотр" },
   { key: "lots:write", group: "warehouse", label: "Партии — создание и редактирование" },

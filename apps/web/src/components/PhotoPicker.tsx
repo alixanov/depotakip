@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Image as ImageIcon, Upload, X } from "lucide-react";
+import { Camera, Image as ImageIcon, Upload, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { CameraCaptureDialog } from "@/components/CameraCaptureDialog";
 import { cn } from "@/lib/utils";
 
 interface PhotoPickerProps {
@@ -26,6 +27,7 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [previews, setPreviews] = useState<Preview[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   // HTML5 drag-and-drop reorder state. Touch devices don't fire HTML5 dnd
   // events — that's a known limitation; touch users can still re-add files in
   // the desired order.
@@ -93,46 +95,66 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
 
   return (
     <div className="space-y-2">
-      <label
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!disabled) setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          ingest(Array.from(e.dataTransfer.files));
-        }}
-        className={cn(
-          "flex h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-sm transition-colors",
-          dragOver ? "border-primary bg-primary/5" : "border-border bg-muted/30",
-          disabled && "pointer-events-none opacity-50"
-        )}
-      >
-        <Upload className="h-5 w-5 text-muted-foreground" />
-        <span className="text-muted-foreground">{t("photo:dropzone_hint")}</span>
-        <span className="text-[11px] text-muted-foreground">
-          {t("photo:dropzone_limits", {
-            remaining,
-            max: maxCount,
-            mb: Math.round(maxBytes / (1024 * 1024)),
-          })}
-        </span>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp"
-          className="sr-only"
-          disabled={disabled || remaining <= 0}
-          onChange={(e) => {
-            const files = e.target.files ? Array.from(e.target.files) : [];
-            ingest(files);
-            if (inputRef.current) inputRef.current.value = "";
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!disabled) setDragOver(true);
           }}
-        />
-      </label>
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            ingest(Array.from(e.dataTransfer.files));
+          }}
+          className={cn(
+            "flex h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-sm transition-colors",
+            dragOver ? "border-primary bg-primary/5" : "border-border bg-muted/30",
+            disabled && "pointer-events-none opacity-50"
+          )}
+        >
+          <Upload className="h-5 w-5 text-muted-foreground" />
+          <span className="text-muted-foreground">{t("photo:dropzone_hint")}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {t("photo:dropzone_limits", {
+              remaining,
+              max: maxCount,
+              mb: Math.round(maxBytes / (1024 * 1024)),
+            })}
+          </span>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+            disabled={disabled || remaining <= 0}
+            onChange={(e) => {
+              const files = e.target.files ? Array.from(e.target.files) : [];
+              ingest(files);
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+          />
+        </label>
+
+        {/* Camera capture — opens a getUserMedia dialog. Disabled when the
+         *  upload limit is reached so we don't surprise the operator with an
+         *  immediate "skip overflow" toast right after they take a shot. */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setCameraOpen(true)}
+          disabled={disabled || remaining <= 0}
+          className="h-28 flex-col gap-1 px-4 sm:w-32"
+          aria-label={t("photo:camera_open")}
+        >
+          <Camera className="h-5 w-5" />
+          <span className="text-xs font-semibold">{t("photo:camera_short")}</span>
+          <span className="text-[11px] font-normal text-muted-foreground">
+            {t("photo:camera_open")}
+          </span>
+        </Button>
+      </div>
 
       {previews.length > 0 && (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -210,6 +232,15 @@ export function PhotoPicker({ value, onChange, maxCount, maxBytes, disabled }: P
           {t("photo:empty_hint")}
         </p>
       )}
+
+      <CameraCaptureDialog
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={(file) => {
+          // Reuse the same size/count/MIME validation pipeline as drag-drop.
+          ingest([file]);
+        }}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import type { PermissionKey } from "@sadiyakargo/shared";
 import { unauthorized, forbidden } from "../lib/errors.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 
@@ -24,7 +25,12 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     req.userId = payload.sub;
     req.orgId = payload.orgId;
     req.roleId = payload.roleId;
-    req.userPermissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+    // Defensive filter: if a future bug ever signs a JWT with non-string
+    // permission entries, `requirePermission` would silently 403 everyone
+    // forever. Drop anything we can't compare against.
+    req.userPermissions = Array.isArray(payload.permissions)
+      ? payload.permissions.filter((p): p is string => typeof p === "string")
+      : [];
     next();
   } catch {
     next(unauthorized("Geçersiz veya süresi dolmuş token"));
@@ -35,7 +41,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
  * AND-semantics: every key must be present in the user's permission set.
  * For OR use `requireAnyPermission`. Always pair with `requireAuth` upstream.
  */
-export function requirePermission(...required: string[]) {
+export function requirePermission(...required: PermissionKey[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const perms = req.userPermissions;
     if (!perms) {
@@ -52,7 +58,7 @@ export function requirePermission(...required: string[]) {
   };
 }
 
-export function requireAnyPermission(...required: string[]) {
+export function requireAnyPermission(...required: PermissionKey[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const perms = req.userPermissions;
     if (!perms) {

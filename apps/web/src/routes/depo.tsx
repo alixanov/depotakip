@@ -4,8 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CURRENCIES, type CreateLotInput, type InboundLot } from "@sadiyakargo/shared";
-import { Download, ImageIcon, Plus, Trash2 } from "lucide-react";
+import {
+  CURRENCIES,
+  LOT_STATUSES,
+  LOT_STATUS_TONE,
+  type CreateLotInput,
+  type InboundLot,
+  type LotStatus,
+  type StatusTone,
+} from "@sadiyakargo/shared";
+import { Download, History, ImageIcon, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,13 +31,17 @@ import { downloadReceiptPdf, lotsApi } from "@/lib/api/lots";
 import { sendersApi } from "@/lib/api/senders";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requireAuth } from "@/lib/guards";
-import { useAuthStore } from "@/stores/auth";
+import { useCan } from "@/stores/auth";
 import { formatDate, formatMoneyObject, isoDateOnly, toMinor } from "@/lib/format";
 import { LotStatusPill } from "@/components/ui/status-pill";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DatePicker, DateRangePicker } from "@/components/ui/date-picker";
+import { FilterChips, type FilterChip } from "@/components/ui/filter-chips";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { PhotoPicker } from "@/components/PhotoPicker";
 import { PhotoGalleryLightbox } from "@/components/PhotoGalleryLightbox";
 import { PhotoThumb } from "@/components/PhotoThumb";
+import { LotShipmentsSheet } from "@/components/LotShipmentsSheet";
 import { SenderFormDialog } from "@/components/SenderFormDialog";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
@@ -46,6 +58,18 @@ import {
 const PHOTO_MAX_COUNT = 10;
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
+// Tone → dot colour. Kept local so the status filter chips can render the
+// little coloured indicator without nesting a full `<LotStatusPill>`, which
+// would smear its own bg+ring into the chip-button.
+const DOT_TONE_CLASS: Record<StatusTone, string> = {
+  neutral: "bg-slate-400",
+  warning: "bg-amber-500",
+  success: "bg-emerald-500",
+  danger: "bg-rose-500",
+  info: "bg-violet-500",
+  muted: "bg-zinc-400",
+};
+
 const TABS = ["lots", "receive", "stock"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -54,7 +78,10 @@ const depoSearchSchema = z.object({
   tab: z.enum(TABS).optional().catch(undefined),
   page: z.coerce.number().int().positive().optional().catch(undefined),
   senderId: z.string().optional().catch(undefined),
-  available: z.coerce.boolean().optional().catch(undefined),
+  q: z.string().optional().catch(undefined),
+  status: z.enum(LOT_STATUSES).optional().catch(undefined),
+  from: z.string().optional().catch(undefined),
+  to: z.string().optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/depo")({
@@ -64,7 +91,7 @@ export const Route = createFileRoute("/depo")({
 });
 
 function DepoPage() {
-  const role = useAuthStore((s) => s.user?.role);
+  const canCreate = useCan("lots:write");
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const tab: Tab = search.tab ?? "lots";
@@ -72,7 +99,6 @@ function DepoPage() {
     navigate({
       search: (s) => ({ ...s, tab: next === "lots" ? undefined : (next as Tab) }),
     });
-  const canCreate = role === "admin" || role === "operator";
   const { t } = useTranslation();
 
   return (
@@ -99,22 +125,55 @@ function DepoPage() {
 
 function LotsTab() {
   const qc = useQueryClient();
-  const role = useAuthStore((s) => s.user?.role);
+  const canDeleteLot = useCan("lots:delete");
+  const canDeletePhoto = useCan("lots:photos:delete");
+  const canReorderPhotos = useCan("lots:write");
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const page = search.page ?? 1;
   const senderFilter = search.senderId ?? "";
-  const availableOnly = search.available ?? true;
+  const statusFilter = search.status ?? "";
+  const dateFrom = search.from ?? "";
+  const dateTo = search.to ?? "";
+  const queryText = search.q ?? "";
+
+  // Local search input (debounced into URL search) so typing doesn't push
+  // a new history entry per keystroke.
+  const [searchInput, setSearchInput] = useState(queryText);
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+
+  // Push debounced search into URL state, resetting pagination.
+  if (debouncedSearch !== queryText) {
+    navigate({
+      search: (s) => ({ ...s, page: undefined, q: debouncedSearch || undefined }),
+      replace: true,
+    });
+  }
 
   const update = (patch: Partial<typeof search>) =>
     navigate({ search: (s) => ({ ...s, ...patch }) });
   const setPage = (p: number) => update({ page: p === 1 ? undefined : p });
   const setSenderFilter = (id: string) => update({ page: undefined, senderId: id || undefined });
-  const setAvailableOnly = (v: boolean) =>
-    update({ page: undefined, available: v ? undefined : false });
+  const setStatusFilter = (s: LotStatus | "") =>
+    update({ page: undefined, status: s || undefined });
+  const setDateRange = (next: { from?: string; to?: string }) =>
+    update({ page: undefined, from: next.from || undefined, to: next.to || undefined });
+  const clearAllFilters = () =>
+    navigate({
+      search: (s) => ({
+        ...s,
+        page: undefined,
+        senderId: undefined,
+        status: undefined,
+        from: undefined,
+        to: undefined,
+        q: undefined,
+      }),
+    });
 
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [galleryLot, setGalleryLot] = useState<InboundLot | null>(null);
+  const [historyLot, setHistoryLot] = useState<InboundLot | null>(null);
   const { t } = useTranslation();
 
   const sendersQuery = useQuery({
@@ -123,14 +182,25 @@ function LotsTab() {
   });
 
   const lotsQuery = useQuery({
-    queryKey: ["lots", { page, senderFilter, availableOnly }],
+    queryKey: ["lots", { page, senderFilter, statusFilter, dateFrom, dateTo, queryText }],
     queryFn: () =>
       lotsApi.list({
         page,
         limit: 20,
         senderId: senderFilter || undefined,
-        available: availableOnly ? true : undefined,
+        status: statusFilter || undefined,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
       }),
+  });
+
+  // Server doesn't support label search yet — filter client-side over the
+  // current page. When `queryText` is set the count chip above the table
+  // reflects the *filtered* number, not the raw page total.
+  const filteredLots = (lotsQuery.data?.data ?? []).filter((l) => {
+    if (!queryText) return true;
+    const q = queryText.toLowerCase();
+    return l.label?.toLowerCase().includes(q);
   });
 
   const removeMutation = useMutation({
@@ -143,69 +213,76 @@ function LotsTab() {
 
   const columns: Column<InboundLot>[] = [
     {
+      key: "photo",
+      header: t("depo:col_photo"),
+      width: "64px",
+      cell: (l) => (
+        <PhotoThumb
+          lotId={l.id}
+          photoId={l.photos[0]?.id ?? null}
+          size={40}
+          onClick={l.photos.length > 0 ? () => setGalleryLot(l) : undefined}
+        />
+      ),
+    },
+    {
       key: "received",
       header: t("date"),
-      cell: (l) => formatDate(l.receivedAt),
-      width: "100px",
+      cell: (l) => <span className="whitespace-nowrap">{formatDate(l.receivedAt)}</span>,
+      width: "110px",
     },
     {
       key: "sender",
       header: t("depo:col_sender"),
-      cell: (l) => (
-        <div className="min-w-0">
-          <div className="truncate font-medium">{senderName(l.senderId)}</div>
-          {l.label && <div className="truncate text-xs text-muted-foreground">{l.label}</div>}
-        </div>
-      ),
+      cell: (l) => <span className="truncate font-medium">{senderName(l.senderId)}</span>,
+    },
+    {
+      key: "label",
+      header: t("depo:col_label"),
+      cell: (l) =>
+        l.label ? (
+          <span className="truncate">{l.label}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: "qty",
       header: t("depo:col_qty"),
       cell: (l) => (
-        <span>
-          {l.qtyAvailable}
+        <span className="tabular-nums whitespace-nowrap">
+          <span className="font-semibold">{l.qtyAvailable}</span>
           <span className="text-muted-foreground"> / {l.qtyIn}</span>
         </span>
       ),
-      width: "100px",
+      width: "110px",
+      className: "text-right",
     },
     {
       key: "unitPrice",
       header: t("depo:col_unitPrice"),
       cell: (l) =>
         l.unitPrice ? (
-          <span className="tabular-nums">{formatMoneyObject(l.unitPrice)}</span>
+          <span className="tabular-nums whitespace-nowrap">{formatMoneyObject(l.unitPrice)}</span>
         ) : (
           <span className="text-muted-foreground">{t("depo:unitPrice_empty")}</span>
         ),
-      width: "120px",
+      width: "130px",
       className: "text-right",
     },
     {
       key: "status",
       header: t("status"),
       cell: (l) => <LotStatusPill status={l.status} />,
-      width: "140px",
+      width: "130px",
     },
     {
       key: "actions",
       header: "",
-      width: "140px",
+      width: "120px",
       className: "text-right",
       cell: (l) => (
         <div className="flex justify-end gap-1">
-          {l.photos.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setGalleryLot(l)}
-              aria-label={t("photo:open_gallery_aria")}
-              className="gap-1 px-2"
-            >
-              <ImageIcon className="h-4 w-4" />
-              <span className="text-xs tabular-nums">{l.photos.length}</span>
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="icon"
@@ -214,7 +291,17 @@ function LotsTab() {
           >
             <Download className="h-4 w-4" />
           </Button>
-          {role === "admin" && l.qtyAvailable === l.qtyIn && (
+          {l.qtyAvailable < l.qtyIn && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setHistoryLot(l)}
+              aria-label={t("depo:shipments_aria")}
+            >
+              <History className="h-4 w-4" />
+            </Button>
+          )}
+          {canDeleteLot && l.qtyAvailable === l.qtyIn && (
             <Button variant="ghost" size="icon" onClick={() => setConfirmId(l.id)}>
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
@@ -224,9 +311,79 @@ function LotsTab() {
     },
   ];
 
+  // Build active-filter chip list for the toolbar — one chip per non-default
+  // filter, plus a "clear all" link via the FilterChips contract.
+  const formatRange = () => {
+    if (dateFrom && dateTo) return `${formatDate(dateFrom)} → ${formatDate(dateTo)}`;
+    if (dateFrom) return `${formatDate(dateFrom)} →`;
+    if (dateTo) return `→ ${formatDate(dateTo)}`;
+    return "—";
+  };
+  const activeChips: FilterChip[] = [];
+  if (queryText) {
+    activeChips.push({
+      key: "q",
+      label: (
+        <>
+          {t("depo:filter_active_search")}: <span className="font-semibold">{queryText}</span>
+        </>
+      ),
+      onClear: () => {
+        setSearchInput("");
+        update({ page: undefined, q: undefined });
+      },
+    });
+  }
+  if (senderFilter) {
+    activeChips.push({
+      key: "sender",
+      label: (
+        <>
+          {t("depo:filter_active_sender")}:{" "}
+          <span className="font-semibold">{senderName(senderFilter)}</span>
+        </>
+      ),
+      onClear: () => setSenderFilter(""),
+    });
+  }
+  if (statusFilter) {
+    activeChips.push({
+      key: "status",
+      label: (
+        <>
+          {t("depo:filter_active_status")}:{" "}
+          <span className="font-semibold">{t(`depo:status_${statusFilter}`)}</span>
+        </>
+      ),
+      onClear: () => setStatusFilter(""),
+    });
+  }
+  if (dateFrom || dateTo) {
+    activeChips.push({
+      key: "range",
+      label: (
+        <>
+          {t("depo:filter_active_period")}: <span className="font-semibold">{formatRange()}</span>
+        </>
+      ),
+      onClear: () => setDateRange({}),
+    });
+  }
+
   return (
     <div className="space-y-3">
+      {/* Top filter bar — search (left, takes remaining space) + sender +
+       *  date range + availability checkbox. All filters reset pagination. */}
       <div className="flex flex-wrap items-end gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t("depo:filter_label_ph")}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <div className="w-48">
           <Combobox
             options={[
@@ -241,21 +398,73 @@ function LotsTab() {
             placeholder={t("depo:filter_senders")}
           />
         </div>
-        <label className="flex h-11 items-center gap-1.5 text-xs">
-          <input
-            type="checkbox"
-            checked={availableOnly}
-            onChange={(e) => setAvailableOnly(e.target.checked)}
-          />
-          {t("depo:filter_available")}
-        </label>
+        <DateRangePicker
+          from={dateFrom || undefined}
+          to={dateTo || undefined}
+          onChange={setDateRange}
+          placeholder={t("depo:filter_period")}
+          className="w-60"
+        />
+      </div>
+
+      {/* Status chips — clickable filter, mutually exclusive with "all". */}
+      <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label={t("status")}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!statusFilter}
+          onClick={() => setStatusFilter("")}
+          className={cn(
+            "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+            !statusFilter
+              ? "border-primary bg-primary-soft text-primary-soft-foreground"
+              : "border-input bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          )}
+        >
+          {t("depo:filter_status_all")}
+        </button>
+        {LOT_STATUSES.map((s) => {
+          const active = statusFilter === s;
+          const tone = LOT_STATUS_TONE[s];
+          // Render dot+label directly. Embedding <LotStatusPill> double-stacks
+          // its own tone bg+ring on top of the chip's border — in dark mode
+          // `dark:bg-rose-900/30` beats our `bg-transparent` override and
+          // produces the "smudged glow" look reported in the screenshot.
+          return (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+                active
+                  ? "border-primary bg-primary-soft text-primary-soft-foreground"
+                  : "border-input bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              )}
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", DOT_TONE_CLASS[tone])} />
+              {t(`depo:status_${s}`)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Results count + chip-row with active filters and one-click clear-all */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="primary" size="lg">
+          <ImageIcon className="h-3 w-3" />
+          {t("depo:filter_results", { n: filteredLots.length })}
+        </Badge>
+        <FilterChips chips={activeChips} onClearAll={clearAllFilters} />
       </div>
 
       <Card>
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={lotsQuery.data?.data}
+            data={filteredLots}
             loading={lotsQuery.isLoading}
             error={lotsQuery.error as Error | null}
             rowKey={(l) => l.id}
@@ -286,18 +495,6 @@ function LotsTab() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    {l.photos.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setGalleryLot(l)}
-                        aria-label={t("photo:open_gallery_aria")}
-                        className="gap-1 px-2"
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                        <span className="text-xs tabular-nums">{l.photos.length}</span>
-                      </Button>
-                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -306,7 +503,17 @@ function LotsTab() {
                     >
                       <Download className="h-4 w-4" />
                     </Button>
-                    {role === "admin" && l.qtyAvailable === l.qtyIn && (
+                    {l.qtyAvailable < l.qtyIn && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setHistoryLot(l)}
+                        aria-label={t("depo:shipments_aria")}
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDeleteLot && l.qtyAvailable === l.qtyIn && (
                       <Button variant="ghost" size="icon" onClick={() => setConfirmId(l.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -346,10 +553,20 @@ function LotsTab() {
           }
           open={!!galleryLot}
           onOpenChange={(o) => !o && setGalleryLot(null)}
-          canDelete={role === "admin"}
-          canReorder={role === "admin" || role === "operator"}
+          canDelete={canDeletePhoto}
+          canReorder={canReorderPhotos}
         />
       )}
+
+      <LotShipmentsSheet
+        lotId={historyLot?.id ?? null}
+        lotLabel={
+          historyLot
+            ? `${senderName(historyLot.senderId)}${historyLot.label ? ` — ${historyLot.label}` : ""}`
+            : undefined
+        }
+        onOpenChange={(o) => !o && setHistoryLot(null)}
+      />
     </div>
   );
 }
@@ -421,9 +638,14 @@ function ReceiveTab() {
           values.unitPriceAmount && values.unitPriceAmount > 0
             ? { amount: toMinor(values.unitPriceAmount), currency: values.unitPriceCurrency }
             : null,
+        // `notes` is required-with-default in CreateLotInput (not optional),
+        // so we always send a string — empty becomes "" server-side.
         notes: values.notes,
-        // DatePicker keeps yyyy-mm-dd; backend createLotSchema requires full ISO.
-        receivedAt: new Date(values.receivedAt).toISOString(),
+        // DatePicker yields a yyyy-mm-dd local-date string; backend
+        // createLotSchema requires `.datetime()`. We anchor at 12:00 UTC so
+        // operators in either +N or -N timezones see the day they picked
+        // when the value is round-tripped through Intl.DateTimeFormat.
+        receivedAt: `${values.receivedAt}T12:00:00.000Z`,
       };
       try {
         const lot = await create.mutateAsync(payload);
@@ -655,6 +877,8 @@ function ReceiveTab() {
  * the client because lots/list does not yet support label search server-side —
  * the dataset is bounded (server returns at most `limit` items per page).
  */
+const STOCK_PAGE_LIMIT = 200;
+
 function StockTab() {
   const { t } = useTranslation();
   const [senderFilter, setSenderFilter] = useState("");
@@ -666,17 +890,20 @@ function StockTab() {
     queryKey: ["senders", "all"],
     queryFn: () => sendersApi.list({ limit: 200 }),
   });
-  // 200 covers small/mid warehouses without pagination noise. If stock grows
-  // past that we add server-side pagination + search params here.
+  // STOCK_PAGE_LIMIT covers small/mid warehouses without pagination noise.
+  // If `pagination.total` exceeds it we surface a banner so the user knows the
+  // view is partial — until server-side label search + paging are added here.
   const lotsQuery = useQuery({
     queryKey: ["lots", "stock", { senderFilter }],
     queryFn: () =>
       lotsApi.list({
-        limit: 200,
+        limit: STOCK_PAGE_LIMIT,
         available: true,
         senderId: senderFilter || undefined,
       }),
   });
+  const total = lotsQuery.data?.pagination.total ?? 0;
+  const truncated = total > STOCK_PAGE_LIMIT;
 
   const senderName = (id: string) =>
     sendersQuery.data?.data.find((s) => s.id === id)?.fullName || "—";
@@ -768,6 +995,12 @@ function StockTab() {
           />
         </div>
       </div>
+
+      {truncated && (
+        <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning-foreground">
+          {t("depo:stock_partial", { shown: STOCK_PAGE_LIMIT, total })}
+        </p>
+      )}
 
       <Card>
         <CardContent className="p-0">

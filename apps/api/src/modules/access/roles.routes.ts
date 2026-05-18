@@ -7,8 +7,6 @@ import * as controller from "./roles.controller.js";
 const router = Router();
 router.use(requireAuth);
 
-// Read endpoints also gate on `roles:manage` because role names + permissions
-// are sensitive enough that operators don't need to enumerate them.
 router.get("/", requirePermission("roles:manage"), controller.list);
 router.get(
   "/:id",

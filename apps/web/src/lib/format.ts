@@ -1,8 +1,16 @@
 import type { Currency, Money } from "@sadiyakargo/shared";
 import { useUiStore } from "@/stores/ui";
-import { LOCALE_BCP47 } from "./i18n";
+import i18n, { LOCALE_BCP47, type AppLocale } from "./i18n";
 
 const DEFAULT_LOCALE = "tr-TR";
+
+/** Resolve a BCP-47 locale from the current i18n language, defaulting to TR.
+ *  Used by formatters that aren't called from the `useFormatters` hook so the
+ *  output (e.g. "2 saat önce") still respects the user's language switch. */
+function activeBcp47(): string {
+  const lang = i18n.language as AppLocale | undefined;
+  return (lang && LOCALE_BCP47[lang]) || DEFAULT_LOCALE;
+}
 
 /**
  * React hook for components that need locale-aware formatters.
@@ -31,8 +39,8 @@ export function fromMinor(minor: number): number {
 }
 
 /** Format a minor-unit amount as a currency string. */
-export function formatMoney(minor: number, currency: Currency, locale = DEFAULT_LOCALE): string {
-  return new Intl.NumberFormat(locale, {
+export function formatMoney(minor: number, currency: Currency, locale?: string): string {
+  return new Intl.NumberFormat(locale ?? activeBcp47(), {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -41,12 +49,12 @@ export function formatMoney(minor: number, currency: Currency, locale = DEFAULT_
 }
 
 /** Format a Money object directly. */
-export function formatMoneyObject(m: Money, locale = DEFAULT_LOCALE): string {
+export function formatMoneyObject(m: Money, locale?: string): string {
   return formatMoney(m.amount, m.currency, locale);
 }
 
 /** Format USD-cents (raw integer) — used in balances/reports. */
-export function formatUsdCents(cents: number, locale = DEFAULT_LOCALE): string {
+export function formatUsdCents(cents: number, locale?: string): string {
   return formatMoney(cents, "USD", locale);
 }
 
@@ -54,14 +62,11 @@ export function formatUsdCents(cents: number, locale = DEFAULT_LOCALE): string {
  * Compact money format for KPI tiles where space is precious — large UZS
  * amounts (e.g. 12,500,000 → "12,5M") via native Intl notation.
  */
-export function formatMoneyCompact(
-  minor: number,
-  currency: Currency,
-  locale = DEFAULT_LOCALE
-): string {
+export function formatMoneyCompact(minor: number, currency: Currency, locale?: string): string {
+  const effective = locale ?? activeBcp47();
   const value = fromMinor(minor);
-  if (Math.abs(value) < 10_000) return formatMoney(minor, currency, locale);
-  return new Intl.NumberFormat(locale, {
+  if (Math.abs(value) < 10_000) return formatMoney(minor, currency, effective);
+  return new Intl.NumberFormat(effective, {
     style: "currency",
     currency,
     notation: "compact",
@@ -70,34 +75,58 @@ export function formatMoneyCompact(
   }).format(value);
 }
 
-export function formatUsdCentsCompact(cents: number, locale = DEFAULT_LOCALE): string {
+export function formatUsdCentsCompact(cents: number, locale?: string): string {
   return formatMoneyCompact(cents, "USD", locale);
 }
 
-export function formatDate(iso: string | Date, locale = DEFAULT_LOCALE): string {
+export function formatDate(iso: string | Date, locale?: string): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return d.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
+  return d.toLocaleDateString(locale ?? activeBcp47(), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
-export function formatDateTime(iso: string | Date, locale = DEFAULT_LOCALE): string {
+export function formatDateTime(iso: string | Date, locale?: string): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return d.toLocaleString(locale, { dateStyle: "short", timeStyle: "short" });
+  return d.toLocaleString(locale ?? activeBcp47(), { dateStyle: "short", timeStyle: "short" });
 }
 
-/** "2 saat önce", "yarın", "şimdi". Falls back to a date if delta exceeds 30 days. */
-export function formatRelativeTime(iso: string | Date, locale = "tr"): string {
+/** Locale-aware "just now" label for the < 5s edge case where Intl.RTF doesn't
+ *  give a nice phrasing. Keys map to the AppLocale set used elsewhere. */
+const JUST_NOW: Record<AppLocale, string> = {
+  tr: "şimdi",
+  ru: "только что",
+  uz: "hozir",
+};
+
+/**
+ * "2 часа назад" / "2 saat önce" / "2 soat oldin" relative-time formatter.
+ * `locale` accepts either an AppLocale (tr|ru|uz) or a raw BCP-47 string. When
+ * omitted it follows the currently active i18n language so call-sites that
+ * don't go through `useFormatters` still localise correctly.
+ * Falls back to an absolute date for deltas above 30 days.
+ */
+export function formatRelativeTime(iso: string | Date, locale?: string): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   const diffSec = (Date.now() - d.getTime()) / 1000;
   const absSec = Math.abs(diffSec);
   const sign = diffSec >= 0 ? -1 : 1;
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
-  if (absSec < 5) return locale === "tr" ? "şimdi" : "now";
+  const appLocale = (locale as AppLocale | undefined) ?? (i18n.language as AppLocale | undefined);
+  const bcp47 =
+    appLocale && LOCALE_BCP47[appLocale] ? LOCALE_BCP47[appLocale] : (locale ?? activeBcp47());
+  const rtf = new Intl.RelativeTimeFormat(bcp47, { numeric: "auto" });
+
+  if (absSec < 5) {
+    return appLocale && JUST_NOW[appLocale] ? JUST_NOW[appLocale] : JUST_NOW.tr;
+  }
   if (absSec < 60) return rtf.format(sign * Math.round(absSec), "second");
   if (absSec < 3600) return rtf.format(sign * Math.round(absSec / 60), "minute");
   if (absSec < 86400) return rtf.format(sign * Math.round(absSec / 3600), "hour");
   if (absSec < 86400 * 30) return rtf.format(sign * Math.round(absSec / 86400), "day");
-  return formatDate(d);
+  return formatDate(d, bcp47);
 }
 
 /** ISO yyyy-mm-dd string for <input type="date"> defaults. */

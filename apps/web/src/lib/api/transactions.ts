@@ -45,14 +45,17 @@ export const transactionsApi = {
     }),
   carrierBalances: () => request<BalanceRow[]>("/transactions/balances/carriers"),
   senderBalances: () => request<BalanceRow[]>("/transactions/balances/senders"),
-  receiptPdfUrl: (id: string) => `${API_BASE}/transactions/${id}/receipt.pdf`,
+  receiptPdfUrl: (id: string, lang?: string) =>
+    `${API_BASE}/transactions/${id}/receipt.pdf${lang ? `?lang=${lang}` : ""}`,
 };
 
 export async function downloadPaymentReceipt(id: string): Promise<void> {
   const { toast } = await import("sonner");
+  const { useUiStore } = await import("@/stores/ui");
   try {
     const token = useAuthStore.getState().accessToken;
-    const res = await fetch(transactionsApi.receiptPdfUrl(id), {
+    const lang = useUiStore.getState().lang;
+    const res = await fetch(transactionsApi.receiptPdfUrl(id, lang), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
     });

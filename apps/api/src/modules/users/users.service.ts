@@ -103,11 +103,27 @@ Lütfen ${env.WEB_BASE_URL}/login adresinden giriş yapın ve ilk kullanımda ş
   return { user: await asSafeJSON(user), tempPassword };
 }
 
-export async function update(orgId: string, id: string, input: UpdateUserInput): Promise<SafeUser> {
+export async function update(
+  orgId: string,
+  id: string,
+  input: UpdateUserInput,
+  requesterId: string
+): Promise<SafeUser> {
   const orgObjectId = new Types.ObjectId(orgId);
   if (input.roleId) {
     const role = await Role.findOne({ _id: new Types.ObjectId(input.roleId), orgId: orgObjectId });
     if (!role) throw badRequest("Rol bulunamadı");
+  }
+  // Self-protection: a user with `users:manage` could otherwise promote
+  // themselves into a higher-privileged role by editing their own row.
+  // Disabling oneself is also blocked for the same lockout reason.
+  if (id === requesterId) {
+    if (input.roleId !== undefined) {
+      throw conflict("Kendi rolünüzü değiştiremezsiniz");
+    }
+    if (input.active === false) {
+      throw conflict("Kendi hesabınızı devre dışı bırakamazsınız");
+    }
   }
   const $set: Record<string, unknown> = {};
   if (input.fullName !== undefined) $set.fullName = input.fullName;

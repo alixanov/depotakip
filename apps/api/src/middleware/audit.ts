@@ -20,21 +20,39 @@ function entityTypeFromUrl(url: string): { type: string; id: string | null } {
   return { type: m[1], id: m[2] || null };
 }
 
+// Guards against (a) cyclic graphs (Mongoose subdocs carry $__parent → owner
+// → subdoc) and (b) accidental traversal into framework internals. Anything
+// past the cap or already-seen is collapsed to `null` rather than thrown so
+// audit logging never breaks a real request.
+const SANITIZE_MAX_DEPTH = 12;
+
 function sanitize<T>(value: T): T {
-  if (typeof value === "string") return value as T;
-  if (Array.isArray(value)) return value.map(sanitize) as T;
+  return sanitizeInner(value, 0, new WeakSet()) as T;
+}
+
+function sanitizeInner(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+  if (depth > SANITIZE_MAX_DEPTH) return null;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map((v) => sanitizeInner(v, depth + 1, seen));
   if (value && typeof value === "object") {
+    if (seen.has(value)) return null;
+    seen.add(value);
     const obj = value as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(obj)) {
+      // Skip Mongoose-internal keys ($__, $__parent, $__schemaType, $op, …
+      // and _doc) so we never recurse into the prototype/parent chain in the
+      // first place. WeakSet below is a backstop for anything that slips
+      // through (e.g. third-party objects with their own cycles).
+      if (k.startsWith("$") || k === "_doc") continue;
       if (k === "passwordHash" || k === "password" || k === "tempPassword") continue;
       if (k === "phone" || k === "telefon") {
         out[k] = typeof v === "string" ? v.replace(/(\+?\d{2})\d+(\d{4})/, "$1***$2") : v;
         continue;
       }
-      out[k] = sanitize(v);
+      out[k] = sanitizeInner(v, depth + 1, seen);
     }
-    return out as T;
+    return out;
   }
   return value;
 }

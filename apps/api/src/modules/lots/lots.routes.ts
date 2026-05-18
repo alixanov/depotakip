@@ -20,6 +20,7 @@ router.get("/stock/by-sender", controller.stockBySender);
 
 // PDF receipt — placed before /:id so it doesn't collide with the wildcard.
 router.get("/:id/receipt.pdf", validate({ params: idParamSchema }), receiptPdf);
+router.get("/:id/shipments", validate({ params: idParamSchema }), controller.shipmentsForLot);
 
 router.get("/", controller.list);
 router.get("/:id", validate({ params: idParamSchema }), controller.get);

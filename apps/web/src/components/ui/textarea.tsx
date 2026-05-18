@@ -8,7 +8,7 @@ export function Textarea({ className, rows = 3, ...props }: ComponentProps<"text
       className={cn(
         "flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-soft",
         "ring-offset-background placeholder:text-muted-foreground/70",
-        "transition-[box-shadow,border-color] duration-150 resize-y",
+        "transition-[box-shadow,border-color] duration-150 resize-y max-h-96",
         "hover:border-foreground/20",
         "focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15",
         "aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:border-destructive aria-[invalid=true]:focus-visible:ring-destructive/20",

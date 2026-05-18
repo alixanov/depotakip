@@ -15,7 +15,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuthStore, userCan } from "@/stores/auth";
@@ -36,6 +36,19 @@ export function MobileBottomNav() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const logout = useLogout();
   const { t } = useTranslation();
+
+  // Lock background scroll while the overlay is open so the underlying page
+  // can't move under the user's finger. Hook must run before any early return
+  // (rules-of-hooks) — guard inside on `menuOpen`.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
+
   if (!user) return null;
 
   // The "Çıkış" tab requires shipment write access. The Manage section covers
@@ -43,9 +56,10 @@ export function MobileBottomNav() {
   // the user can manage any of them, show the heading.
   const canShip = userCan(user, "shipments:write");
   const canManage = userCan(user, "senders:write") || userCan(user, "carriers:write");
+  const canManageRoles = userCan(user, "roles:manage");
   const isAdmin =
     userCan(user, "users:manage") ||
-    userCan(user, "roles:manage") ||
+    canManageRoles ||
     userCan(user, "permissions:manage") ||
     userCan(user, "audit:read") ||
     userCan(user, "notifications:manage") ||
@@ -82,10 +96,14 @@ export function MobileBottomNav() {
           role="dialog"
           aria-modal="true"
           aria-label={t("nav:all_pages")}
-          className="fixed inset-0 z-50 flex md:hidden"
+          // z-[70] beats both the sticky header (z-40, but `sticky` makes its
+          // own stacking context) and the bottom nav (z-40). Without this the
+          // drawer overlay only dimmed the middle of the viewport, leaving
+          // the header + bottom nav clickable under the scrim.
+          className="fixed inset-0 z-[70] flex md:hidden"
         >
           <div className="absolute inset-0 bg-black/55" onClick={close} aria-hidden="true" />
-          <div className="ml-auto h-full w-72 max-w-[85vw] overflow-y-auto bg-background p-4 shadow-xl">
+          <div className="relative ml-auto flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("nav:all_pages")}
             </p>
@@ -115,18 +133,31 @@ export function MobileBottomNav() {
               {isAdmin && (
                 <>
                   <DrawerSectionLabel>{t("profile:info_role")}: admin</DrawerSectionLabel>
-                  <DrawerLink to="/admin/exchange-rates" onClose={close} icon={<Coins />}>
-                    {t("nav:rates")}
-                  </DrawerLink>
-                  <DrawerLink to="/admin/users" onClose={close} icon={<ShieldCheck />}>
-                    {t("nav:users")}
-                  </DrawerLink>
-                  <DrawerLink to="/admin/notifications" onClose={close} icon={<Bell />}>
-                    {t("nav:notifications")}
-                  </DrawerLink>
-                  <DrawerLink to="/admin/audit" onClose={close} icon={<ScrollText />}>
-                    {t("nav:audit")}
-                  </DrawerLink>
+                  {userCan(user, "exchange_rates:manage") && (
+                    <DrawerLink to="/admin/exchange-rates" onClose={close} icon={<Coins />}>
+                      {t("nav:rates")}
+                    </DrawerLink>
+                  )}
+                  {userCan(user, "users:manage") && (
+                    <DrawerLink to="/admin/users" onClose={close} icon={<ShieldCheck />}>
+                      {t("nav:users")}
+                    </DrawerLink>
+                  )}
+                  {canManageRoles && (
+                    <DrawerLink to="/admin/access" onClose={close} icon={<ShieldCheck />}>
+                      {t("nav:access")}
+                    </DrawerLink>
+                  )}
+                  {userCan(user, "notifications:manage") && (
+                    <DrawerLink to="/admin/notifications" onClose={close} icon={<Bell />}>
+                      {t("nav:notifications")}
+                    </DrawerLink>
+                  )}
+                  {userCan(user, "audit:read") && (
+                    <DrawerLink to="/admin/audit" onClose={close} icon={<ScrollText />}>
+                      {t("nav:audit")}
+                    </DrawerLink>
+                  )}
                 </>
               )}
 

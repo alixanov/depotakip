@@ -49,6 +49,11 @@ export const stockBySender = asyncHandler(async (req: Request, res: Response) =>
   res.json(await service.stockBySender(req.orgId));
 });
 
+export const shipmentsForLot = asyncHandler<IdParams>(async (req, res) => {
+  if (!req.orgId) throw unauthorized();
+  res.json(await service.shipmentsForLot(req.orgId, req.params.id));
+});
+
 type PhotoParams = { id: string; photoId: string };
 
 export const addPhotos = asyncHandler<IdParams>(async (req, res) => {

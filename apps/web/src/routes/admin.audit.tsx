@@ -7,11 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataTable, PaginationBar, type Column } from "@/components/ui/data-table";
 import { auditApi, type AuditEntry } from "@/lib/api/audit";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 import { formatDateTime } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/audit")({
-  beforeLoad: requireRole("admin"),
+  beforeLoad: requirePermission("audit:read"),
   component: AuditPage,
 });
 

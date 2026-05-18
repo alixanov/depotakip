@@ -1,4 +1,10 @@
 import { StyleSheet } from "@react-pdf/renderer";
+import { registerFonts } from "./lib/fonts.js";
+
+// Register Unicode font at module-load time so any document importing
+// `styles` is guaranteed to have NotoSans available — required for proper
+// Cyrillic (RU/UZ) and extended-Turkish glyph rendering.
+registerFonts();
 
 export const colors = {
   primary: "#1E40AF",
@@ -10,7 +16,7 @@ export const colors = {
 
 export const styles = StyleSheet.create({
   page: {
-    fontFamily: "Helvetica",
+    fontFamily: "NotoSans",
     fontSize: 10,
     padding: 40,
     color: colors.text,

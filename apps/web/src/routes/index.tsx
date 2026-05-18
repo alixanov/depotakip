@@ -25,7 +25,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { reportsApi } from "@/lib/api/reports";
 import { shipmentsApi } from "@/lib/api/shipments";
 import { requireAuth } from "@/lib/guards";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore, useCanAny } from "@/stores/auth";
 import { formatDate, formatUsdCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Shipment, Status } from "@sadiyakargo/shared";
@@ -38,7 +38,9 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
-  const canMutate = user?.role !== "viewer";
+  // `canMutate` gates the home page's primary-action shortcuts ("Depo" + "Çıkış").
+  // True for anyone who can either intake stock or create a shipment.
+  const canMutate = useCanAny("lots:write", "shipments:write");
 
   const dashboard = useQuery({
     queryKey: ["reports", "dashboard"],

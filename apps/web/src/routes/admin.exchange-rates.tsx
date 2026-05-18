@@ -30,10 +30,10 @@ import { Coins } from "lucide-react";
 import { exchangeRatesApi } from "@/lib/api/exchangeRates";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
-import { requireRole } from "@/lib/guards";
+import { requirePermission } from "@/lib/guards";
 
 export const Route = createFileRoute("/admin/exchange-rates")({
-  beforeLoad: requireRole("admin"),
+  beforeLoad: requirePermission("exchange_rates:manage"),
   component: ExchangeRatesPage,
 });
 

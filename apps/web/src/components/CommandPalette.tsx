@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore, userCan } from "@/stores/auth";
 import { useUiStore, applyTheme } from "@/stores/ui";
 import { setLanguage, type AppLocale } from "@/lib/i18n";
 import { searchApi } from "@/lib/api/search";
@@ -73,33 +73,55 @@ export function CommandPalette() {
     requestAnimationFrame(() => navigate({ to }));
   };
 
-  const canMutate = user?.role !== "viewer";
-  const isAdmin = user?.role === "admin";
+  // Per-permission flags — match MobileBottomNav / __root AdminMenu so the
+  // palette never offers a route the user can't reach.
+  const canShip = userCan(user, "shipments:write");
+  const canManageSenders = userCan(user, "senders:write");
+  const canManageCarriers = userCan(user, "carriers:write");
+  const canManageRates = userCan(user, "exchange_rates:manage");
+  const canManageUsers = userCan(user, "users:manage");
+  const canManageRoles = userCan(user, "roles:manage");
+  const canManageNotifications = userCan(user, "notifications:manage");
+  const canReadAudit = userCan(user, "audit:read");
 
   const navItems = useMemo(
     () => [
       { key: "/", label: t("nav:home"), icon: BarChart3 },
       { key: "/depo", label: t("nav:warehouse"), icon: Warehouse },
-      ...(canMutate ? [{ key: "/cikis", label: t("nav:ship"), icon: Truck }] : []),
+      ...(canShip ? [{ key: "/cikis", label: t("nav:ship"), icon: Truck }] : []),
       { key: "/takip", label: t("nav:track"), icon: Package },
       { key: "/finans", label: t("nav:finance"), icon: Coins },
       { key: "/raporlar", label: t("nav:reports"), icon: FileBarChart },
       { key: "/profile", label: t("profile"), icon: UserCircle },
     ],
-    [t, canMutate]
+    [t, canShip]
   );
 
   const adminItems = useMemo(
     () =>
       [
-        canMutate && { key: "/admin/senders", label: t("nav:senders"), icon: UsersIcon },
-        canMutate && { key: "/admin/carriers", label: t("nav:carriers"), icon: Truck },
-        isAdmin && { key: "/admin/exchange-rates", label: t("nav:rates"), icon: Coins },
-        isAdmin && { key: "/admin/users", label: t("nav:users"), icon: ShieldCheck },
-        isAdmin && { key: "/admin/notifications", label: t("nav:notifications"), icon: Bell },
-        isAdmin && { key: "/admin/audit", label: t("nav:audit"), icon: ScrollText },
+        canManageSenders && { key: "/admin/senders", label: t("nav:senders"), icon: UsersIcon },
+        canManageCarriers && { key: "/admin/carriers", label: t("nav:carriers"), icon: Truck },
+        canManageRates && { key: "/admin/exchange-rates", label: t("nav:rates"), icon: Coins },
+        canManageUsers && { key: "/admin/users", label: t("nav:users"), icon: ShieldCheck },
+        canManageRoles && { key: "/admin/access", label: t("nav:access"), icon: ShieldCheck },
+        canManageNotifications && {
+          key: "/admin/notifications",
+          label: t("nav:notifications"),
+          icon: Bell,
+        },
+        canReadAudit && { key: "/admin/audit", label: t("nav:audit"), icon: ScrollText },
       ].filter(Boolean) as { key: string; label: string; icon: typeof BarChart3 }[],
-    [t, canMutate, isAdmin]
+    [
+      t,
+      canManageSenders,
+      canManageCarriers,
+      canManageRates,
+      canManageUsers,
+      canManageRoles,
+      canManageNotifications,
+      canReadAudit,
+    ]
   );
 
   return (

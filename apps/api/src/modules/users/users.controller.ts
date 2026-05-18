@@ -29,8 +29,8 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const update = asyncHandler<IdParams>(async (req, res) => {
-  if (!req.orgId) throw unauthorized();
-  res.json(await service.update(req.orgId, req.params.id, req.body as UpdateUserInput));
+  if (!req.orgId || !req.userId) throw unauthorized();
+  res.json(await service.update(req.orgId, req.params.id, req.body as UpdateUserInput, req.userId));
 });
 
 export const remove = asyncHandler<IdParams>(async (req, res) => {

@@ -23,6 +23,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { shipmentsApi, downloadWaybillPdf } from "@/lib/api/shipments";
 import { lotsApi } from "@/lib/api/lots";
 import { carriersApi } from "@/lib/api/carriers";
+import { sendersApi } from "@/lib/api/senders";
 import { formatDate, formatDateTime, formatMoney, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,15 @@ export function ShipmentDetailSheet({
   const carriersQuery = useQuery({
     queryKey: ["carriers", "all"],
     queryFn: () => carriersApi.list({ limit: 200 }),
+    enabled: !!shipmentId,
+  });
+
+  // Senders are used to resolve `lot.senderId` → display name in the items
+  // list. We keep a single broad query here (cached across all detail sheets)
+  // rather than fetching per-lot, because the senders set is small.
+  const sendersQuery = useQuery({
+    queryKey: ["senders", "all"],
+    queryFn: () => sendersApi.list({ limit: 200 }),
     enabled: !!shipmentId,
   });
 
@@ -195,33 +205,51 @@ export function ShipmentDetailSheet({
               <ul className="space-y-2">
                 {detail.data.items.map((item) => {
                   const lot = lotsQuery.data?.data.find((l) => l.id === item.lotId);
+                  const sender = lot
+                    ? sendersQuery.data?.data.find((s) => s.id === lot.senderId)
+                    : undefined;
+                  const senderName = sender?.fullName?.trim() || null;
                   return (
                     <li
                       key={item.id}
-                      className="flex items-center justify-between rounded-xl border bg-card/50 p-3"
+                      className="flex items-center justify-between gap-3 rounded-xl border bg-card/50 p-3"
                     >
-                      <div className="flex items-center gap-3">
-                        <Avatar name={item.lotId} size="sm" />
-                        <div>
-                          <p className="text-sm font-semibold">
-                            <span className="font-mono text-xs text-muted-foreground">
-                              #{item.lotId.slice(-6)}
-                            </span>
+                      <div className="flex min-w-0 items-center gap-3">
+                        {lot?.firstPhotoUrl ? (
+                          <img
+                            src={lot.firstPhotoUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-9 w-9 shrink-0 rounded-md border object-cover"
+                          />
+                        ) : (
+                          <Avatar name={lot?.label || item.lotId} size="sm" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {lot?.label || (
+                              <span className="font-mono text-xs text-muted-foreground">
+                                #{item.lotId.slice(-6)}
+                              </span>
+                            )}
                           </p>
-                          {lot && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(lot.receivedAt)}
-                            </p>
-                          )}
+                          <p className="truncate text-xs text-muted-foreground">
+                            {senderName || (lot && formatDate(lot.receivedAt)) || "—"}
+                          </p>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <p className="text-sm font-bold tabular-nums">{item.qty}</p>
-                        {item.senderCharge && (
-                          <p className="text-[11px] text-muted-foreground">
+                        {lot?.unitPrice ? (
+                          <p className="text-[11px] tabular-nums text-muted-foreground">
+                            {formatMoney(lot.unitPrice.amount, lot.unitPrice.currency)}
+                            <span className="opacity-60"> / {t("common:unit_pcs")}</span>
+                          </p>
+                        ) : item.senderCharge ? (
+                          <p className="text-[11px] tabular-nums text-muted-foreground">
                             {formatMoney(item.senderCharge.amount, item.senderCharge.currency)}
                           </p>
-                        )}
+                        ) : null}
                       </div>
                     </li>
                   );

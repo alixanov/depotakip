@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -24,8 +24,9 @@ import {
 } from "@/components/ui/responsive-dialog";
 import { useTranslation } from "react-i18next";
 import { downloadWaybillPdf, shipmentsApi } from "@/lib/api/shipments";
+import { carriersApi } from "@/lib/api/carriers";
 import { requireAuth } from "@/lib/guards";
-import { useAuthStore } from "@/stores/auth";
+import { useCan } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 import { formatDate, formatRelativeTime } from "@/lib/format";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -35,7 +36,13 @@ import { RowActions } from "@/components/ui/row-actions";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useRealtimeStore } from "@/stores/realtime";
 
-/** Persistable URL state. Survives reload, browser back/forward, deep links. */
+/** Persistable URL state. Survives reload, browser back/forward, deep links.
+ *  `id` is accepted (so legacy `/takip?id=…` links still work), but it's now
+ *  consumed as a one-shot trigger that opens the detail Sheet and then drops
+ *  itself from the URL — see `useEffect` below. Persisting the open Sheet in
+ *  the URL caused refreshes to land users on a near-full-screen panel with
+ *  the underlying table hidden behind a backdrop, which read as "Tracking
+ *  page is broken". */
 const searchSchema = z.object({
   id: z.string().optional().catch(undefined),
   status: z.enum(STATUSES).optional().catch(undefined),
@@ -63,8 +70,7 @@ export const Route = createFileRoute("/takip")({
 });
 
 function TakipPage() {
-  const role = useAuthStore((s) => s.user?.role);
-  const canMutate = role === "admin" || role === "operator";
+  const canMutate = useCan("shipments:write");
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const page = search.page ?? 1;
@@ -99,7 +105,16 @@ function TakipPage() {
     });
 
   const [editing, setEditing] = useState<Shipment | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  // Detail Sheet uses local state instead of URL persistence. We still accept
+  // `?id=…` for deep links (LotShipmentsSheet → /takip?id=…), but consume it
+  // once on mount so a refresh doesn't re-open the Sheet on top of the table.
+  const [detailId, setDetailId] = useState<string | null>(() => search.id ?? null);
+  useEffect(() => {
+    if (search.id) {
+      navigate({ search: (s) => ({ ...s, id: undefined }), replace: true });
+    }
+    // Run once on mount; subsequent URL changes don't auto-open the Sheet.
+  }, [search.id, navigate]);
   const { t } = useTranslation();
   // Subscribe to flashedAt so rows re-render when a socket event lands and
   // again when the flash TTL expires.
@@ -116,6 +131,18 @@ function TakipPage() {
         sort: sortToParam(sort),
       }),
   });
+
+  // Carriers index for the table's "Перевозчик" column. Cached separately so
+  // the shipments query doesn't refetch when the carrier list changes.
+  const carriersQuery = useQuery({
+    queryKey: ["carriers", "all"],
+    queryFn: () => carriersApi.list({ limit: 200 }),
+    staleTime: 60_000,
+  });
+  const carrierName = (id: string): string => {
+    const c = carriersQuery.data?.data.find((x) => x.id === id);
+    return c ? `${c.firstName} ${c.lastName}` : "—";
+  };
 
   const columns: Column<Shipment>[] = [
     {
@@ -153,6 +180,12 @@ function TakipPage() {
       key: "recipient",
       header: t("takip:col_recipient"),
       cell: (s) => s.recipient?.name || "—",
+    },
+    {
+      key: "carrier",
+      header: t("takip:col_carrier"),
+      cell: (s) => <span className="truncate">{carrierName(s.carrierId)}</span>,
+      width: "160px",
     },
     {
       key: "items",
@@ -341,6 +374,10 @@ function TakipPage() {
                     <StatusPill status={s.status} />
                   </div>
                   <p className="mt-1 truncate text-sm font-semibold">{s.recipient?.name || "—"}</p>
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                    <Truck className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{carrierName(s.carrierId)}</span>
+                  </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {formatDate(s.shipmentDate)} · {s.items.reduce((acc, it) => acc + it.qty, 0)}{" "}
                     {t("takip:col_qty")}

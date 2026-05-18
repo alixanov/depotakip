@@ -1,10 +1,19 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, FocusEvent } from "react";
 import { cn } from "@/lib/utils";
 
-export function Input({ className, type, ...props }: ComponentProps<"input">) {
+export function Input({ className, type, onFocus, ...props }: ComponentProps<"input">) {
+  // For `number` fields, auto-select existing value on focus so typing replaces
+  // it instead of appending — without this, a field showing "0" + typing "55"
+  // visually looks like "055" until React re-renders the parsed state.
+  const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
+    if (type === "number") e.currentTarget.select();
+    onFocus?.(e);
+  };
+
   return (
     <input
       type={type}
+      onFocus={handleFocus}
       className={cn(
         "flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-soft",
         "ring-offset-background placeholder:text-muted-foreground/70",

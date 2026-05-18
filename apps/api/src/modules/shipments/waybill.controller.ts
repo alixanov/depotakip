@@ -5,6 +5,8 @@ import { WaybillDocument, qrDataUrl, renderToStream } from "@sadiyakargo/pdf-tem
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { env } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
+import { pdfLangFromQuery } from "../../lib/pdfLang.js";
 import { tenantFilter } from "../../lib/repository.js";
 import { Shipment } from "./shipment.model.js";
 import { Carrier } from "../carriers/carrier.model.js";
@@ -37,6 +39,7 @@ export const waybillPdf = asyncHandler<IdParams>(async (req, res) => {
 
   const doc = createElement(WaybillDocument, {
     qrDataUrl: qr,
+    language: pdfLangFromQuery(req.query.lang),
     shipment: {
       id: shipment._id.toString(),
       shortCode: shipment.shortCode,
@@ -51,11 +54,25 @@ export const waybillPdf = asyncHandler<IdParams>(async (req, res) => {
       phone: carrier?.phone || "—",
     },
     recipient: shipment.recipient,
-    org: { name: "Depo Yönetim" },
+    org: { name: env.ORG_NAME },
   });
 
-  const stream = await renderToStream(doc as any);
+  let stream;
+  try {
+    stream = await renderToStream(doc as any);
+  } catch (err) {
+    logger.error(
+      { err, shipmentId: shipment._id.toString(), shortCode: shipment.shortCode },
+      "waybill_pdf_render_failed"
+    );
+    throw err;
+  }
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="waybill-${shipment.shortCode}.pdf"`);
+  stream.on("error", (err) => {
+    logger.error({ err, shipmentId: shipment._id.toString() }, "waybill_pdf_stream_failed");
+    if (!res.headersSent) res.status(500).end();
+    else res.destroy(err);
+  });
   stream.pipe(res as unknown as NodeJS.WritableStream);
 });

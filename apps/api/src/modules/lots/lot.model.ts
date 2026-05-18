@@ -103,13 +103,20 @@ lotSchema.index({ orgId: 1, senderId: 1, status: 1 });
 lotSchema.index({ orgId: 1, receivedAt: -1 });
 
 lotSchema.methods.toClient = function toClient() {
+  // unitPrice is a Mongoose subdocument when present — return a plain POJO
+  // so audit middleware / JSON.stringify don't walk into $__parent cycles.
+  const up = this.unitPrice;
+  const unitPrice =
+    up && typeof up === "object"
+      ? { amount: up.amount, currency: up.currency as UnitPrice["currency"] }
+      : null;
   return {
     id: this._id.toString(),
     senderId: this.senderId.toString(),
     label: this.label ?? "",
     qtyIn: this.qtyIn,
     qtyAvailable: this.qtyAvailable,
-    unitPrice: this.unitPrice,
+    unitPrice,
     receivedAt: this.receivedAt.toISOString(),
     notes: this.notes,
     status: this.status,

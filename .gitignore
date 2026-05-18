@@ -40,3 +40,17 @@ pnpm-debug.log*
 # transient audit/diag artifacts
 audit-*.png
 .playwright-mcp/
+
+# Playwright verification screenshots written to the repo root during dev
+/verify-*.png
+/access-*.png
+/cikis-*.png
+/depo-*.png
+/raporlar-*.png
+/finans-*.png
+/takip-*.png
+/camera-*.png
+/*-snapshot.md
+
+# local photo-storage staging (MinIO bind-mount, populated at runtime)
+/images/

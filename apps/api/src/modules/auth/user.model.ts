@@ -1,5 +1,7 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
 import type { UserRoleRef } from "@sadiyakargo/shared";
+import { unauthorized } from "../../lib/errors.js";
+import { logger } from "../../lib/logger.js";
 import { Role } from "../access/role.model.js";
 
 export interface UserDoc extends Document {
@@ -62,13 +64,19 @@ userSchema.methods.toSafeJSON = function toSafeJSON(role: UserRoleRef) {
   };
 };
 
-/** Helper used by controllers/services to resolve a user's role view. */
+/**
+ * Resolve a user's role for the auth/me response and the JWT payload. A
+ * missing role is a corruption signal — `roles.service.remove` blocks
+ * deletion of in-use roles, so reaching this path means manual DB tampering
+ * or a partially-applied migration. We log + throw so the user gets a clear
+ * "ask the admin" message instead of an empty-permissions shell that 403s
+ * on every click.
+ */
 export async function loadRoleRef(roleId: Types.ObjectId): Promise<UserRoleRef> {
   const role = await Role.findById(roleId);
   if (!role) {
-    // Stale roleId — should not happen if delete is gated, but fall back to
-    // a safe empty role rather than crashing.
-    return { id: roleId.toString(), name: "(missing)", isSystem: false, permissions: [] };
+    logger.error({ roleId: roleId.toString() }, "user_role_missing");
+    throw unauthorized("Atanmış rol artık mevcut değil — yönetici ile iletişime geçin");
   }
   return {
     id: role._id.toString(),

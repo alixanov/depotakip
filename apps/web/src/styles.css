@@ -1,10 +1,11 @@
-@import "tailwindcss";
-
 /* ─────────────────────────────────────────────────────────────────────────
  * Brand fonts — Inter Variable for UI/body, Geist Mono for tabular numbers
  * and codes. Loaded via Google Fonts so build stays tiny.
+ * Must precede `@import "tailwindcss"` because the Tailwind import expands
+ * into many rules, and CSS forbids `@import` after non-import statements.
  * ──────────────────────────────────────────────────────────────────────── */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Design tokens. Light is default; .dark on <html> swaps the surface scale.

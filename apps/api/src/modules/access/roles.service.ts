@@ -31,8 +31,6 @@ export async function list(orgId: string): Promise<RoleWithUserCount[]> {
   const orgObjectId = new Types.ObjectId(orgId);
   const roles = await Role.find({ orgId: orgObjectId }).sort({ isSystem: -1, name: 1 });
 
-  // Single aggregation gives us userCount per role so the admin UI can disable
-  // the Delete button for in-use roles without N+1 queries.
   const counts = await User.aggregate<{ _id: Types.ObjectId; n: number }>([
     { $match: { orgId: orgObjectId, deletedAt: null } },
     { $group: { _id: "$roleId", n: { $sum: 1 } } },
@@ -63,16 +61,34 @@ export async function create(orgId: string, input: CreateRoleInput) {
 }
 
 export async function update(orgId: string, id: string, input: UpdateRoleInput) {
-  const doc = await Role.findOne({
-    _id: new Types.ObjectId(id),
-    orgId: new Types.ObjectId(orgId),
-  });
+  const orgObjectId = new Types.ObjectId(orgId);
+  const doc = await Role.findOne({ _id: new Types.ObjectId(id), orgId: orgObjectId });
   if (!doc) throw notFound("Rol bulunamadı");
-  if (doc.isSystem && doc.name === "admin" && input.permissions) {
-    // Lockout protection — the seeded admin role must always retain full
-    // privileges so at least one account can manage RBAC.
-    throw conflict("Sistem admin rolünün yetkileri değiştirilemez");
+
+  // System roles are locked: only description is editable. Allowing rename
+  // or permission edits would break `ensureAdmin` lookups (by name) and the
+  // lockout guard that depends on `name === "admin"`. Custom-create a new
+  // role if you need a different configuration.
+  if (doc.isSystem) {
+    if (input.name !== undefined && input.name !== doc.name) {
+      throw conflict("Sistem rolünün ismi değiştirilemez");
+    }
+    if (input.permissions !== undefined) {
+      throw conflict("Sistem rolünün yetkileri değiştirilemez");
+    }
   }
+
+  // Explicit duplicate-name check produces a useful message instead of the
+  // generic E11000 "Kayıt zaten mevcut" from the central error handler.
+  if (input.name !== undefined && input.name !== doc.name) {
+    const clash = await Role.findOne({
+      orgId: orgObjectId,
+      name: input.name,
+      _id: { $ne: doc._id },
+    });
+    if (clash) throw conflict("Bu isimde rol zaten var");
+  }
+
   if (input.permissions) await assertPermissionsExist(input.permissions);
   if (input.name !== undefined) doc.name = input.name;
   if (input.description !== undefined) doc.description = input.description;

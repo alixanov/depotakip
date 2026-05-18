@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils";
 
 interface NumberInputProps extends Omit<ComponentProps<"input">, "type" | "onChange" | "value"> {
   value?: number;
-  onChange?: (next: number) => void;
+  /**
+   * Emits `undefined` when the field is cleared (Backspace-empty) so the form
+   * state stays "no value" instead of resetting to `0` — which would otherwise
+   * make typing "123" look like "0123" until the parsed state caught up.
+   */
+  onChange?: (next: number | undefined) => void;
   min?: number;
   max?: number;
   step?: number;
@@ -74,7 +79,22 @@ export function NumberInput({
         type="number"
         inputMode="decimal"
         value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value === "" ? 0 : Number(e.target.value))}
+        onChange={(e) => {
+          const raw = e.target.value;
+          // Empty input → undefined (NOT 0). Otherwise the field would
+          // immediately re-render with "0", and a follow-up "123" would
+          // briefly show "0123" before parsing caught up.
+          if (raw === "") {
+            onChange?.(undefined);
+            return;
+          }
+          const parsed = Number(raw);
+          if (!Number.isNaN(parsed)) onChange?.(parsed);
+        }}
+        // Auto-select the existing value on focus so typing replaces it
+        // instead of appending — otherwise "0" + "55" looks like "055"
+        // to the user even though the parsed state is 55.
+        onFocus={(e) => e.currentTarget.select()}
         min={min}
         max={max}
         step={step}
