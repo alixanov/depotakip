@@ -7,6 +7,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { env } from "../config/env.js";
+import { logger } from "./logger.js";
 
 // Single shared client. The SDK pools HTTP keep-alive connections internally.
 const s3 = new S3Client({
@@ -20,14 +21,32 @@ const s3 = new S3Client({
 });
 
 export async function putObject(key: string, body: Buffer, contentType: string): Promise<void> {
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: env.S3_BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    })
-  );
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+    );
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        endpoint: env.S3_ENDPOINT,
+        region: env.S3_REGION,
+        bucket: env.S3_BUCKET,
+        key,
+        contentType,
+        bytes: body.byteLength,
+        forcePathStyle: env.S3_FORCE_PATH_STYLE,
+        accessKeyPreview: env.S3_ACCESS_KEY.slice(0, 4) + "***",
+      },
+      "s3_put_object_failed"
+    );
+    throw err;
+  }
 }
 
 export async function getPresignedGetUrl(key: string, ttlSeconds: number): Promise<string> {
