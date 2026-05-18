@@ -1,7 +1,13 @@
 import { Types } from "mongoose";
-import type { CreateSenderInput, UpdateSenderInput } from "@sadiyakargo/shared";
+import {
+  createSenderSchema,
+  type BulkImportReport,
+  type CreateSenderInput,
+  type UpdateSenderInput,
+} from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
+import type { BulkImportRow } from "../../lib/bulkImport.js";
 import { Sender } from "./sender.model.js";
 
 interface ListQuery {
@@ -58,4 +64,101 @@ export async function update(orgId: string, id: string, input: UpdateSenderInput
 export async function remove(orgId: string, id: string) {
   const doc = await softDeleteOne(Sender, orgId, id);
   if (!doc) throw notFound("Gönderici bulunamadı");
+}
+
+/** Колонки для импорта senders. Используется и парсером (валидация имён),
+ *  и template-генератором. */
+export const SENDER_IMPORT_COLUMNS = ["fullName", "phone", "address", "notes"] as const;
+
+export interface BulkImportOptions {
+  onDuplicate: "skip" | "update";
+}
+
+/**
+ * Bulk-import senders. Partial best-effort: каждая строка независимо.
+ * Дубликаты phone (в БД или в самом файле) обрабатываются согласно
+ * `options.onDuplicate`. Возвращает отчёт для оператора.
+ */
+export async function bulkImport(
+  orgId: string,
+  rows: BulkImportRow[],
+  options: BulkImportOptions
+): Promise<BulkImportReport> {
+  const report: BulkImportReport = {
+    total: rows.length,
+    created: 0,
+    updated: 0,
+    skippedDuplicates: 0,
+    failed: [],
+  };
+  const orgObjectId = new Types.ObjectId(orgId);
+
+  // Один pre-fetch всех существующих phone'ов из файла — избегает N+1.
+  const inputPhones = rows.map((r) => (r.data.phone ?? "").trim()).filter(Boolean);
+  const existing = inputPhones.length
+    ? await Sender.find(tenantFilter(orgId, { phone: { $in: inputPhones } }), {
+        phone: 1,
+        _id: 1,
+      })
+    : [];
+  const existingByPhone = new Map(existing.map((s) => [s.phone, s._id]));
+
+  // Защита от дублей внутри одного файла (приоритет первой попавшейся).
+  const seenInBatch = new Set<string>();
+
+  for (const { row, data } of rows) {
+    const input = {
+      fullName: (data.fullName ?? "").trim(),
+      phone: (data.phone ?? "").trim(),
+      address: (data.address ?? "").trim(),
+      notes: (data.notes ?? "").trim(),
+      isSelf: false,
+    };
+    const parsed = createSenderSchema.safeParse(input);
+    if (!parsed.success) {
+      report.failed.push({
+        row,
+        reason: parsed.error.issues
+          .map((iss) => `${iss.path.join(".") || "?"}: ${iss.message}`)
+          .join("; "),
+      });
+      continue;
+    }
+    const { phone } = parsed.data;
+    if (seenInBatch.has(phone)) {
+      report.failed.push({ row, reason: `Дубликат phone в файле (${phone})` });
+      continue;
+    }
+    seenInBatch.add(phone);
+
+    const existingId = existingByPhone.get(phone);
+    if (existingId) {
+      if (options.onDuplicate === "skip") {
+        report.skippedDuplicates += 1;
+        continue;
+      }
+      // update
+      try {
+        await Sender.updateOne({ _id: existingId }, { $set: parsed.data });
+        report.updated += 1;
+      } catch (err) {
+        report.failed.push({
+          row,
+          reason: err instanceof Error ? err.message : "Ошибка обновления",
+        });
+      }
+      continue;
+    }
+    try {
+      await Sender.create({ orgId: orgObjectId, ...parsed.data });
+      report.created += 1;
+    } catch (err) {
+      report.failed.push({
+        row,
+        reason: err instanceof Error ? err.message : "Ошибка создания",
+      });
+    }
+  }
+
+  return report;
 }

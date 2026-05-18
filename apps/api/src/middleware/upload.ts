@@ -25,3 +25,31 @@ export const lotPhotoUpload = multer({
   },
   fileFilter: imageOnly,
 }).array("photos", env.LOT_PHOTO_MAX_COUNT);
+
+// ── Bulk import (senders/carriers из CSV/XLSX) ────────────────────────────
+// Принимаем один файл до 5 MB; формат строго ограничен (магнитная проверка
+// внутри парсера). MIME клиентов разный: Excel ставит officedocument-MIME,
+// но Files Explorer Windows иногда даёт ms-excel, текстовый редактор — plain.
+const BULK_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+
+function csvOrXlsxOnly(
+  _req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+): void {
+  const ok =
+    /\.(csv|xlsx)$/i.test(file.originalname) ||
+    file.mimetype === "text/csv" ||
+    file.mimetype === "application/csv" ||
+    file.mimetype === "text/plain" ||
+    file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    file.mimetype === "application/vnd.ms-excel";
+  if (ok) cb(null, true);
+  else cb(new Error("UNSUPPORTED_MEDIA"));
+}
+
+export const bulkImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BULK_IMPORT_MAX_BYTES, files: 1 },
+  fileFilter: csvOrXlsxOnly,
+}).single("file");

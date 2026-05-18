@@ -46,6 +46,33 @@
   "confirm": {
     "type_to_confirm": "Введите «{{value}}» для подтверждения"
   },
+  "import": {
+    "btn": "Импорт",
+    "title_senders": "Импорт отправителей",
+    "title_carriers": "Импорт перевозчиков",
+    "hint_format": "CSV или XLSX. До 5 МБ, 5000 строк за раз.",
+    "download_template": "Скачать шаблон",
+    "template_failed": "Не удалось скачать шаблон",
+    "dropzone_hint": "Перетащите файл или нажмите для выбора",
+    "dropzone_limits": "CSV / XLSX, до 5 МБ",
+    "on_duplicate_label": "Если телефон уже существует:",
+    "dup_skip": "Пропустить",
+    "dup_skip_hint": "Существующие записи не трогаем",
+    "dup_update": "Обновить",
+    "dup_update_hint": "Перезаписать поля по существующему телефону",
+    "submit": "Импортировать",
+    "stat_total": "Всего",
+    "stat_created": "Создано",
+    "stat_updated": "Обновлено",
+    "stat_skipped": "Пропущено",
+    "failed_title": "Ошибки в {{count}} строках:",
+    "all_ok": "Все строки импортированы успешно.",
+    "another": "Другой файл",
+    "close": "Закрыть",
+    "toast_success": "Импортировано {{count}} записей",
+    "toast_partial": "Готово: {{ok}} ok, {{failed}} с ошибками",
+    "toast_nothing": "Ничего не импортировано"
+  },
   "nav": {
     "home": "Главная",
     "homeShort": "Главная",

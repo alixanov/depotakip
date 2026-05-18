@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type Sender } from "@sadiyakargo/shared";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { DataTable, PaginationBar, type Column } from "@/components/ui/data-tabl
 import { EmptyState } from "@/components/ui/empty-state";
 import { Users } from "lucide-react";
 import { SenderFormDialog } from "@/components/SenderFormDialog";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { sendersApi } from "@/lib/api/senders";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requirePermission } from "@/lib/guards";
@@ -28,6 +29,7 @@ function SendersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Sender | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { t } = useTranslation();
@@ -123,6 +125,10 @@ function SendersPage() {
             }}
             className="w-56"
           />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-1 h-4 w-4" />
+            {t("import:btn")}
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
             {t("add")}
@@ -213,6 +219,15 @@ function SendersPage() {
           }
         }}
         sender={editing ?? undefined}
+      />
+
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        importFn={(file, onDup) => sendersApi.bulkImport(file, onDup)}
+        templateUrl={sendersApi.importTemplateUrl()}
+        invalidateKey="senders"
+        title={t("import:title_senders")}
       />
 
       <ConfirmDialog

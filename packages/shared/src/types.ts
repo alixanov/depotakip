@@ -240,6 +240,16 @@ export interface PaginatedResponse<T> {
   pagination: { page: number; limit: number; total: number; hasMore: boolean };
 }
 
+/** Отчёт по bulk-import: что создано/обновлено/пропущено + список failed-строк
+ *  с человеко-читаемой причиной. row нумеруется с 1 (без header-строки). */
+export interface BulkImportReport {
+  total: number;
+  created: number;
+  updated: number;
+  skippedDuplicates: number;
+  failed: { row: number; reason: string }[];
+}
+
 export interface ApiErrorBody {
   error: string;
   code?: string;

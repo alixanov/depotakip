@@ -1,7 +1,13 @@
 import { Types } from "mongoose";
-import type { CreateCarrierInput, UpdateCarrierInput } from "@sadiyakargo/shared";
+import {
+  createCarrierSchema,
+  type BulkImportReport,
+  type CreateCarrierInput,
+  type UpdateCarrierInput,
+} from "@sadiyakargo/shared";
 import { conflict, notFound } from "../../lib/errors.js";
 import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
+import type { BulkImportRow } from "../../lib/bulkImport.js";
 import { Carrier } from "./carrier.model.js";
 
 interface ListQuery {
@@ -59,4 +65,98 @@ export async function update(orgId: string, id: string, input: UpdateCarrierInpu
 export async function remove(orgId: string, id: string) {
   const doc = await softDeleteOne(Carrier, orgId, id);
   if (!doc) throw notFound("Kargocu bulunamadı");
+}
+
+export const CARRIER_IMPORT_COLUMNS = [
+  "firstName",
+  "lastName",
+  "phone",
+  "deliveryAddressTr",
+  "notes",
+] as const;
+
+export interface BulkImportOptions {
+  onDuplicate: "skip" | "update";
+}
+
+/** Bulk-import carriers. Partial best-effort; см. senders.bulkImport. */
+export async function bulkImport(
+  orgId: string,
+  rows: BulkImportRow[],
+  options: BulkImportOptions
+): Promise<BulkImportReport> {
+  const report: BulkImportReport = {
+    total: rows.length,
+    created: 0,
+    updated: 0,
+    skippedDuplicates: 0,
+    failed: [],
+  };
+  const orgObjectId = new Types.ObjectId(orgId);
+
+  const inputPhones = rows.map((r) => (r.data.phone ?? "").trim()).filter(Boolean);
+  const existing = inputPhones.length
+    ? await Carrier.find(tenantFilter(orgId, { phone: { $in: inputPhones } }), {
+        phone: 1,
+        _id: 1,
+      })
+    : [];
+  const existingByPhone = new Map(existing.map((c) => [c.phone, c._id]));
+
+  const seenInBatch = new Set<string>();
+
+  for (const { row, data } of rows) {
+    const input = {
+      firstName: (data.firstName ?? "").trim(),
+      lastName: (data.lastName ?? "").trim(),
+      phone: (data.phone ?? "").trim(),
+      deliveryAddressTr: (data.deliveryAddressTr ?? "").trim(),
+      notes: (data.notes ?? "").trim(),
+    };
+    const parsed = createCarrierSchema.safeParse(input);
+    if (!parsed.success) {
+      report.failed.push({
+        row,
+        reason: parsed.error.issues
+          .map((iss) => `${iss.path.join(".") || "?"}: ${iss.message}`)
+          .join("; "),
+      });
+      continue;
+    }
+    const { phone } = parsed.data;
+    if (seenInBatch.has(phone)) {
+      report.failed.push({ row, reason: `Дубликат phone в файле (${phone})` });
+      continue;
+    }
+    seenInBatch.add(phone);
+
+    const existingId = existingByPhone.get(phone);
+    if (existingId) {
+      if (options.onDuplicate === "skip") {
+        report.skippedDuplicates += 1;
+        continue;
+      }
+      try {
+        await Carrier.updateOne({ _id: existingId }, { $set: parsed.data });
+        report.updated += 1;
+      } catch (err) {
+        report.failed.push({
+          row,
+          reason: err instanceof Error ? err.message : "Ошибка обновления",
+        });
+      }
+      continue;
+    }
+    try {
+      await Carrier.create({ orgId: orgObjectId, ...parsed.data });
+      report.created += 1;
+    } catch (err) {
+      report.failed.push({
+        row,
+        reason: err instanceof Error ? err.message : "Ошибка создания",
+      });
+    }
+  }
+
+  return report;
 }

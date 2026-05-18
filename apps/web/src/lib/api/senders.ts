@@ -1,9 +1,11 @@
 import type {
+  BulkImportReport,
   CreateSenderInput,
   PaginatedResponse,
   Sender,
   UpdateSenderInput,
 } from "@sadiyakargo/shared";
+import { API_BASE } from "@/lib/env";
 import { request } from "./client";
 
 export const sendersApi = {
@@ -20,4 +22,13 @@ export const sendersApi = {
   update: (id: string, input: UpdateSenderInput) =>
     request<Sender>(`/senders/${id}`, { method: "PATCH", body: input }),
   remove: (id: string) => request<{ ok: true }>(`/senders/${id}`, { method: "DELETE" }),
+  bulkImport: (file: File, onDuplicate: "skip" | "update" = "skip") => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<BulkImportReport>(`/senders/bulk-import?onDuplicate=${onDuplicate}`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  importTemplateUrl: () => `${API_BASE}/senders/import-template.xlsx`,
 };

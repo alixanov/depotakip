@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { type Carrier } from "@sadiyakargo/shared";
-import { Pencil, Plus, Trash2, Truck } from "lucide-react";
+import { FileUp, Pencil, Plus, Trash2, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable, PaginationBar, type Column } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CarrierFormDialog } from "@/components/CarrierFormDialog";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { carriersApi } from "@/lib/api/carriers";
 import { useUndoableDelete } from "@/lib/useUndoableDelete";
 import { requirePermission } from "@/lib/guards";
@@ -27,6 +28,7 @@ function CarriersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Carrier | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const { t } = useTranslation();
@@ -117,6 +119,10 @@ function CarriersPage() {
             }}
             className="w-56"
           />
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-1 h-4 w-4" />
+            {t("import:btn")}
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
             {t("add")}
@@ -204,6 +210,15 @@ function CarriersPage() {
           }
         }}
         carrier={editing ?? undefined}
+      />
+
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        importFn={(file, onDup) => carriersApi.bulkImport(file, onDup)}
+        templateUrl={carriersApi.importTemplateUrl()}
+        invalidateKey="carriers"
+        title={t("import:title_carriers")}
       />
 
       <ConfirmDialog

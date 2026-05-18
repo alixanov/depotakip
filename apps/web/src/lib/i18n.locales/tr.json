@@ -46,6 +46,33 @@
   "confirm": {
     "type_to_confirm": "Onaylamak için \"{{value}}\" yazın"
   },
+  "import": {
+    "btn": "İçe aktar",
+    "title_senders": "Göndericileri içe aktar",
+    "title_carriers": "Kargocuları içe aktar",
+    "hint_format": "CSV veya XLSX. En fazla 5 MB, 5000 satır.",
+    "download_template": "Şablon indir",
+    "template_failed": "Şablon indirilemedi",
+    "dropzone_hint": "Dosyayı sürükleyip bırakın veya tıklayın",
+    "dropzone_limits": "CSV / XLSX, en fazla 5 MB",
+    "on_duplicate_label": "Telefon zaten varsa:",
+    "dup_skip": "Atla",
+    "dup_skip_hint": "Mevcut kaydı değiştirme",
+    "dup_update": "Güncelle",
+    "dup_update_hint": "Mevcut telefon için alanları üzerine yaz",
+    "submit": "İçe aktar",
+    "stat_total": "Toplam",
+    "stat_created": "Oluşturulan",
+    "stat_updated": "Güncellenen",
+    "stat_skipped": "Atlanan",
+    "failed_title": "{{count}} satırda hata:",
+    "all_ok": "Tüm satırlar başarıyla içe aktarıldı.",
+    "another": "Başka dosya",
+    "close": "Kapat",
+    "toast_success": "{{count}} kayıt içe aktarıldı",
+    "toast_partial": "Tamamlandı: {{ok}} başarılı, {{failed}} hatalı",
+    "toast_nothing": "Hiçbir şey içe aktarılmadı"
+  },
   "nav": {
     "home": "Ana Sayfa",
     "homeShort": "Ana",

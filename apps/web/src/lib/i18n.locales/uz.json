@@ -46,6 +46,33 @@
   "confirm": {
     "type_to_confirm": "Tasdiqlash uchun \"{{value}}\" deb yozing"
   },
+  "import": {
+    "btn": "Import",
+    "title_senders": "Jo'natuvchilarni import qilish",
+    "title_carriers": "Tashuvchilarni import qilish",
+    "hint_format": "CSV yoki XLSX. Bir martada 5 MB va 5000 qatorgacha.",
+    "download_template": "Shablonni yuklab olish",
+    "template_failed": "Shablonni yuklab bo'lmadi",
+    "dropzone_hint": "Faylni sudrab tashlang yoki tanlash uchun bosing",
+    "dropzone_limits": "CSV / XLSX, 5 MB gacha",
+    "on_duplicate_label": "Agar telefon mavjud bo'lsa:",
+    "dup_skip": "O'tkazib yuborish",
+    "dup_skip_hint": "Mavjud yozuvga tegmaymiz",
+    "dup_update": "Yangilash",
+    "dup_update_hint": "Mavjud telefon uchun maydonlarni qayta yozish",
+    "submit": "Import qilish",
+    "stat_total": "Jami",
+    "stat_created": "Yaratilgan",
+    "stat_updated": "Yangilangan",
+    "stat_skipped": "O'tkazib yuborilgan",
+    "failed_title": "{{count}} qatorda xato:",
+    "all_ok": "Barcha qatorlar muvaffaqiyatli import qilindi.",
+    "another": "Boshqa fayl",
+    "close": "Yopish",
+    "toast_success": "{{count}} yozuv import qilindi",
+    "toast_partial": "Tayyor: {{ok}} muvaffaqiyatli, {{failed}} xatolik",
+    "toast_nothing": "Hech narsa import qilinmadi"
+  },
   "nav": {
     "home": "Bosh sahifa",
     "homeShort": "Bosh",
