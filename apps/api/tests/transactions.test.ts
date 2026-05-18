@@ -219,6 +219,38 @@ describe("POST /transactions — payment registration", () => {
       })
       .expect(400);
   });
+
+  it("rejects kind/direction несовместимые (carrier_payment + debit)", async () => {
+    const s = await seed();
+    // carrier_payment должен быть credit; debit ловится zod-refine.
+    await request(app)
+      .post(apiPath("/transactions"))
+      .set(...authHeader(s.token))
+      .send({
+        kind: "carrier_payment",
+        counterparty: { type: "carrier", id: s.carrierId },
+        amount: 100,
+        currency: "USD",
+        direction: "debit",
+      })
+      .expect(422);
+  });
+
+  it("rejects kind/counterparty несовместимые (carrier_charge + sender)", async () => {
+    const s = await seed();
+    // carrier_charge должен идти к counterparty.type=carrier.
+    await request(app)
+      .post(apiPath("/transactions"))
+      .set(...authHeader(s.token))
+      .send({
+        kind: "carrier_charge",
+        counterparty: { type: "sender", id: s.senderId },
+        amount: 100,
+        currency: "USD",
+        direction: "debit",
+      })
+      .expect(422);
+  });
 });
 
 describe("GET /transactions/:id/receipt.pdf", () => {
