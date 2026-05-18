@@ -21,10 +21,18 @@ export interface ReceiptDocumentProps {
   };
 }
 
-/** Format a Money value (minor units → display) for the PDF. */
+/**
+ * Format a Money value (minor units → display) for the PDF.
+ * UZS rounds to whole soums in practice — printing "12500000.00 UZS"
+ * on a receipt looks broken — so we round and group-separate it. USD/TRY
+ * keep two decimals.
+ */
 function formatMoney(m: { amount: number; currency: string }): string {
-  const display = (m.amount / 100).toFixed(2);
-  return `${display} ${m.currency}`;
+  const major = m.amount / 100;
+  if (m.currency === "UZS") {
+    return `${Math.round(major).toLocaleString("ru-RU")} ${m.currency}`;
+  }
+  return `${major.toFixed(2)} ${m.currency}`;
 }
 
 export function ReceiptDocument({ qrDataUrl, lot, sender, org }: ReceiptDocumentProps) {

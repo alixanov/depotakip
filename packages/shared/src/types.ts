@@ -19,7 +19,7 @@ export interface Money {
 export interface PhotoRef {
   /** ObjectId; used in /lots/:id/photos/:photoId endpoints. */
   id: string;
-  storageKey: string;
+  /** Always "image/jpeg" today (sharp converts everything) but kept open. */
   mimeType: string;
   sizeBytes: number;
   width?: number;

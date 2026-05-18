@@ -99,17 +99,24 @@ export async function createTx(
  * counterparty. Kind must be `*_payment` (credit) or `adjustment`.
  */
 export async function registerPayment(orgId: string, input: CreateTransactionInput) {
-  // Verify the counterparty exists in this org.
+  // Verify the counterparty exists in this org. The error payload includes
+  // `counterpartyType` + `counterpartyId` so the operator can tell whether
+  // they sent the wrong sender id or the wrong carrier id (the central
+  // error middleware forwards `details` to the client).
+  const notFoundDetails = {
+    counterpartyType: input.counterparty.type,
+    counterpartyId: input.counterparty.id,
+  };
   if (input.counterparty.type === "carrier") {
     const c = await Carrier.findOne(
       tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
     );
-    if (!c) throw badRequest("Karşı taraf bulunamadı");
+    if (!c) throw badRequest("Karşı taraf bulunamadı: kargocu", notFoundDetails);
   } else {
     const s = await Sender.findOne(
       tenantFilter(orgId, { _id: new Types.ObjectId(input.counterparty.id) })
     );
-    if (!s) throw badRequest("Karşı taraf bulunamadı");
+    if (!s) throw badRequest("Karşı taraf bulunamadı: gönderici", notFoundDetails);
   }
 
   const doc = await createTx(orgId, {

@@ -12,6 +12,14 @@
  * from the remaining data, and recreating an empty categories collection
  * brings no value.
  */
+
+// MongoDB error codes we tolerate during an idempotent migration. Anything
+// else (permission denied, network blip, etc.) must propagate so
+// migrate-mongo doesn't mark the migration as applied while leaving the DB
+// half-migrated. Source: https://www.mongodb.com/docs/manual/reference/error-codes/
+const NAMESPACE_NOT_FOUND = 26; // collection (or ns) missing
+const INDEX_NOT_FOUND = 27; // dropIndex on a non-existent index
+
 module.exports = {
   async up(db) {
     // NB: migration 001 created indexes on the camelCase "inboundLots" ghost,
@@ -20,8 +28,9 @@ module.exports = {
     for (const coll of ["inboundLots", "inboundlots"]) {
       try {
         await db.collection(coll).dropIndex("orgId_1_categoryId_1_qtyAvailable_1");
-      } catch {
-        // index may not exist on this side of the rename split
+      } catch (err) {
+        if (err && (err.code === INDEX_NOT_FOUND || err.code === NAMESPACE_NOT_FOUND)) continue;
+        throw err;
       }
     }
 
@@ -31,8 +40,9 @@ module.exports = {
 
     try {
       await db.collection("categories").drop();
-    } catch {
-      // already dropped or never existed
+    } catch (err) {
+      if (err && err.code === NAMESPACE_NOT_FOUND) return;
+      throw err;
     }
   },
 

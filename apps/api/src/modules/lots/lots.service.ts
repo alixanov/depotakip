@@ -4,7 +4,8 @@ import { fileTypeFromBuffer } from "file-type";
 import type { CreateLotInput, SignedPhotoUrlResponse, UpdateLotInput } from "@sadiyakargo/shared";
 import { env } from "../../config/env.js";
 import { badRequest, conflict, notFound, validation } from "../../lib/errors.js";
-import { paginate, softDeleteOne, tenantFilter } from "../../lib/repository.js";
+import { logger } from "../../lib/logger.js";
+import { softDeleteOne, tenantFilter } from "../../lib/repository.js";
 import {
   buildLotPhotoKey,
   deleteObject,
@@ -40,12 +41,26 @@ interface ListQuery {
 const FIRST_PHOTO_TTL_SECONDS = 60 * 60;
 
 type LotClient = ReturnType<InstanceType<typeof InboundLot>["toClient"]>;
+type LotDocType = InstanceType<typeof InboundLot>;
 
-async function withFirstPhotoUrl(lot: LotClient): Promise<LotClient & { firstPhotoUrl?: string }> {
-  const first = lot.photos[0];
-  if (!first) return lot;
-  const firstPhotoUrl = await getPresignedGetUrl(first.storageKey, FIRST_PHOTO_TTL_SECONDS);
-  return { ...lot, firstPhotoUrl };
+/**
+ * Attach a presigned URL for `photos[0]`. Takes the Mongoose doc because
+ * `storageKey` is intentionally not exposed in the client representation
+ * (it's an internal S3 layout detail). Failures are logged but never
+ * propagate — the caller gets a lot without `firstPhotoUrl` instead of
+ * 500, so one broken photo can't take down the whole list view.
+ */
+async function withFirstPhotoUrl(doc: LotDocType): Promise<LotClient & { firstPhotoUrl?: string }> {
+  const client = doc.toClient();
+  const first = doc.photos[0];
+  if (!first) return client;
+  try {
+    const firstPhotoUrl = await getPresignedGetUrl(first.storageKey, FIRST_PHOTO_TTL_SECONDS);
+    return { ...client, firstPhotoUrl };
+  } catch (err) {
+    logger.warn({ lotId: client.id, storageKey: first.storageKey, err }, "first_photo_url_failed");
+    return client;
+  }
 }
 
 export async function list(orgId: string, query: ListQuery) {
@@ -59,15 +74,29 @@ export async function list(orgId: string, query: ListQuery) {
     if (query.to) range.$lte = new Date(query.to);
     Object.assign(filter, { receivedAt: range });
   }
-  const page = await paginate(InboundLot, filter, query, (d) => d.toClient(), { receivedAt: -1 });
-  page.data = await Promise.all(page.data.map(withFirstPhotoUrl));
-  return page;
+  // We need the Mongoose docs (not toClient'd) so `withFirstPhotoUrl` can
+  // read `storageKey`. Re-implement the pagination shape here rather than
+  // going through `paginate` which maps to client output.
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
+  const [docs, total] = await Promise.all([
+    InboundLot.find(filter)
+      .sort({ receivedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    InboundLot.countDocuments(filter),
+  ]);
+  const data = await Promise.all(docs.map(withFirstPhotoUrl));
+  return {
+    data,
+    pagination: { page, limit, total, hasMore: page * limit < total },
+  };
 }
 
 export async function get(orgId: string, id: string) {
   const doc = await InboundLot.findOne(tenantFilter(orgId, { _id: new Types.ObjectId(id) }));
   if (!doc) throw notFound("Parti bulunamadı");
-  return withFirstPhotoUrl(doc.toClient());
+  return withFirstPhotoUrl(doc);
 }
 
 export async function create(orgId: string, input: CreateLotInput) {
@@ -91,9 +120,11 @@ export async function create(orgId: string, input: CreateLotInput) {
 }
 
 export async function update(orgId: string, id: string, input: UpdateLotInput) {
-  // Per TZ: qty/photo/price are immutable once the lot is in (qtyAvailable
-  // is decremented atomically by shipment txns). Only the human-facing
-  // metadata — label and notes — can be corrected.
+  // Per TZ: qty and price are immutable once the lot is in (qtyAvailable
+  // is decremented atomically by shipment txns); photos are mutable but
+  // only through the dedicated `/lots/:id/photos*` endpoints. Through this
+  // PATCH endpoint we only allow correcting the human-facing metadata
+  // (label, notes).
   const $set: Record<string, unknown> = {};
   if (input.label !== undefined) $set.label = input.label;
   if (input.notes !== undefined) $set.notes = input.notes;
@@ -103,7 +134,9 @@ export async function update(orgId: string, id: string, input: UpdateLotInput) {
     { new: true, runValidators: true }
   );
   if (!doc) throw notFound("Parti bulunamadı");
-  return doc.toClient();
+  // Wrap so the TanStack-Query cache update on the web (`qc.setQueryData`)
+  // keeps the thumbnail — list/get/photo endpoints all wrap consistently.
+  return withFirstPhotoUrl(doc);
 }
 
 export async function remove(orgId: string, id: string) {
@@ -138,9 +171,9 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
   }
 
   // Process serially: keeps memory bounded (sharp is CPU-heavy and each input
-  // can hit LOT_PHOTO_MAX_BYTES). If an upload to S3 fails midway, the already
-  // uploaded objects become orphans — acceptable trade-off; a periodic
-  // cleanup script can reconcile against `inboundLots.photos[].storageKey`.
+  // can hit LOT_PHOTO_MAX_BYTES). Track every successful S3 upload — if any
+  // later step fails (subsequent file, the final $push, anything), we issue
+  // best-effort delete requests so we don't pay for orphan objects.
   const prepared: Array<{
     _id: Types.ObjectId;
     storageKey: string;
@@ -150,44 +183,94 @@ export async function addPhotos(orgId: string, lotId: string, files: Express.Mul
     height: number;
     uploadedAt: Date;
   }> = [];
+  const uploadedKeys: string[] = [];
 
-  for (const file of files) {
-    const detected = await fileTypeFromBuffer(file.buffer);
-    if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
-      throw validation("Sadece JPEG, PNG veya WebP yüklenebilir", {
-        fileName: file.originalname,
-        detectedMime: detected?.mime ?? null,
+  try {
+    for (const file of files) {
+      const detected = await fileTypeFromBuffer(file.buffer);
+      if (!detected || !ALLOWED_PHOTO_MIME.has(detected.mime)) {
+        throw validation("Sadece JPEG, PNG veya WebP yüklenebilir", {
+          fileName: file.originalname,
+          detectedMime: detected?.mime ?? null,
+        });
+      }
+
+      const { data, info } = await sharp(file.buffer)
+        .rotate()
+        .resize({ width: RESIZE_MAX, height: RESIZE_MAX, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: JPEG_QUALITY })
+        .toBuffer({ resolveWithObject: true });
+
+      const photoId = new Types.ObjectId();
+      const storageKey = buildLotPhotoKey(orgId, lotId, photoId.toString());
+      await putObject(storageKey, data, "image/jpeg");
+      uploadedKeys.push(storageKey);
+
+      prepared.push({
+        _id: photoId,
+        storageKey,
+        mimeType: "image/jpeg",
+        sizeBytes: data.byteLength,
+        width: info.width,
+        height: info.height,
+        uploadedAt: new Date(),
       });
     }
 
-    const { data, info } = await sharp(file.buffer)
-      .rotate()
-      .resize({ width: RESIZE_MAX, height: RESIZE_MAX, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: JPEG_QUALITY })
-      .toBuffer({ resolveWithObject: true });
-
-    const photoId = new Types.ObjectId();
-    const storageKey = buildLotPhotoKey(orgId, lotId, photoId.toString());
-    await putObject(storageKey, data, "image/jpeg");
-
-    prepared.push({
-      _id: photoId,
-      storageKey,
-      mimeType: "image/jpeg",
-      sizeBytes: data.byteLength,
-      width: info.width,
-      height: info.height,
-      uploadedAt: new Date(),
-    });
+    // The same `$expr` recheck that capped the initial count must run at
+    // commit time — otherwise two concurrent uploads could both pass the
+    // initial `remaining` check (lot.photos.length = 8, each adding 2) and
+    // the array would silently grow past LOT_PHOTO_MAX_COUNT. When the
+    // filter rejects, `updated` is null and the catch block S3-cleans up.
+    const updated = await InboundLot.findOneAndUpdate(
+      tenantFilter(orgId, {
+        _id: new Types.ObjectId(lotId),
+        $expr: { $lte: [{ $size: "$photos" }, env.LOT_PHOTO_MAX_COUNT - prepared.length] },
+      }),
+      { $push: { photos: { $each: prepared } } },
+      { new: true }
+    );
+    if (!updated) {
+      // Distinguish between "lot vanished" (rare) and "concurrent upload
+      // raced ahead" (the common case) by re-fetching without the $expr.
+      const stillExists = await InboundLot.exists(
+        tenantFilter(orgId, { _id: new Types.ObjectId(lotId) })
+      );
+      if (!stillExists) throw notFound("Parti bulunamadı");
+      throw conflict(
+        `Eşzamanlı yükleme sırasında fotoğraf limiti aşıldı (max ${env.LOT_PHOTO_MAX_COUNT})`
+      );
+    }
+    return await withFirstPhotoUrl(updated);
+  } catch (err) {
+    if (uploadedKeys.length > 0) {
+      // Best-effort cleanup. We log every failed delete so an operator can
+      // still find the orphan key in the bucket if the rollback can't keep
+      // up — at least the storage isn't silently leaking.
+      const cleanup = await Promise.allSettled(uploadedKeys.map((k) => deleteObject(k)));
+      for (let i = 0; i < cleanup.length; i += 1) {
+        const r = cleanup[i];
+        if (r.status === "rejected") {
+          logger.warn(
+            { storageKey: uploadedKeys[i], err: r.reason },
+            "lot_photo_orphan_cleanup_failed"
+          );
+        }
+      }
+      logger.warn(
+        {
+          orgId,
+          lotId,
+          attempted: files.length,
+          uploaded: uploadedKeys.length,
+          cleaned: cleanup.filter((r) => r.status === "fulfilled").length,
+          err,
+        },
+        "lot_photo_upload_partial"
+      );
+    }
+    throw err;
   }
-
-  const updated = await InboundLot.findOneAndUpdate(
-    tenantFilter(orgId, { _id: new Types.ObjectId(lotId) }),
-    { $push: { photos: { $each: prepared } } },
-    { new: true }
-  );
-  if (!updated) throw notFound("Parti bulunamadı");
-  return withFirstPhotoUrl(updated.toClient());
 }
 
 export async function removePhoto(orgId: string, lotId: string, photoId: string) {
@@ -207,7 +290,7 @@ export async function removePhoto(orgId: string, lotId: string, photoId: string)
     { new: true }
   );
   if (!updated) throw notFound("Parti bulunamadı");
-  return withFirstPhotoUrl(updated.toClient());
+  return withFirstPhotoUrl(updated);
 }
 
 export async function reorderPhotos(orgId: string, lotId: string, photoIds: string[]) {
@@ -255,7 +338,7 @@ export async function reorderPhotos(orgId: string, lotId: string, photoIds: stri
     { new: true }
   );
   if (!updated) throw notFound("Parti bulunamadı");
-  return withFirstPhotoUrl(updated.toClient());
+  return withFirstPhotoUrl(updated);
 }
 
 export async function getPhotoUrl(
@@ -296,11 +379,23 @@ export async function stockBySender(orgId: string): Promise<StockBreakdownRow[]>
         lots: { $sum: 1 },
       },
     },
+    // Pipeline-form lookup so we can apply the same tenant + soft-delete
+    // filter that every direct Sender query uses. A plain $lookup would
+    // surface deleted senders' names in the stock report.
     {
       $lookup: {
         from: "senders",
-        localField: "_id",
-        foreignField: "_id",
+        let: { sid: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$_id", "$$sid"] },
+              orgId: new Types.ObjectId(orgId),
+              deletedAt: null,
+            },
+          },
+          { $project: { fullName: 1 } },
+        ],
         as: "sender",
       },
     },

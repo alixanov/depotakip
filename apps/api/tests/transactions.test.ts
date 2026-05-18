@@ -40,14 +40,14 @@ function shipmentBody(s: Seed, overrides: Record<string, unknown> = {}) {
   return {
     carrierId: s.carrierId,
     carrierFee: { amount: 5000, currency: "USD" },
-    items: [{ lotId: s.lotId, qty: 3 }],
+    items: [{ lotId: s.lotId, qty: 3, senderCharge: { amount: 1200, currency: "USD" } }],
     recipient: { name: "Ali", phone: "+905551234567", addressTr: "İstanbul" },
     ...overrides,
   };
 }
 
 describe("Shipment → auto-generated transactions", () => {
-  it("creates exactly one carrier_charge per shipment", async () => {
+  it("creates one carrier_charge + per-item sender_charge", async () => {
     const s = await seed();
     const created = await request(app)
       .post(apiPath("/shipments"))
@@ -59,11 +59,28 @@ describe("Shipment → auto-generated transactions", () => {
       .get(apiPath(`/transactions?shipmentId=${created.body.id}`))
       .set(...authHeader(s.token))
       .expect(200);
+    expect(list.body.data).toHaveLength(2);
+    const kinds = list.body.data.map((t: { kind: string }) => t.kind).sort();
+    expect(kinds).toEqual(["carrier_charge", "sender_charge"]);
+  });
+
+  it("skips sender_charge when item.senderCharge is null", async () => {
+    const s = await seed();
+    const created = await request(app)
+      .post(apiPath("/shipments"))
+      .set(...authHeader(s.token))
+      .send(shipmentBody(s, { items: [{ lotId: s.lotId, qty: 1 }] }))
+      .expect(201);
+
+    const list = await request(app)
+      .get(apiPath(`/transactions?shipmentId=${created.body.id}`))
+      .set(...authHeader(s.token))
+      .expect(200);
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0].kind).toBe("carrier_charge");
   });
 
-  it("iptal generates an adjustment reversal of the carrier_charge", async () => {
+  it("iptal generates adjustment reversals for both charge originals", async () => {
     const s = await seed();
     const created = await request(app)
       .post(apiPath("/shipments"))
@@ -82,8 +99,8 @@ describe("Shipment → auto-generated transactions", () => {
       .set(...authHeader(s.token))
       .expect(200);
     const adjustments = list.body.data.filter((t: { kind: string }) => t.kind === "adjustment");
-    expect(adjustments).toHaveLength(1);
-    expect(adjustments[0].direction).toBe("credit");
+    expect(adjustments).toHaveLength(2);
+    expect(adjustments.every((t: { direction: string }) => t.direction === "credit")).toBe(true);
   });
 });
 
@@ -135,6 +152,39 @@ describe("GET /transactions/balances/*", () => {
     expect(row.debitUsd).toBe(5000);
     expect(row.creditUsd).toBe(2000);
     expect(row.balanceUsd).toBe(3000);
+  });
+
+  it("sender_payment credit reduces sender balance", async () => {
+    const s = await seed();
+    await request(app)
+      .post(apiPath("/shipments"))
+      .set(...authHeader(s.token))
+      .send(shipmentBody(s))
+      .expect(201);
+
+    // sender owes us 1200 (per-item sender_charge) → register a 500 payment
+    await request(app)
+      .post(apiPath("/transactions"))
+      .set(...authHeader(s.token))
+      .send({
+        kind: "sender_payment",
+        counterparty: { type: "sender", id: s.senderId },
+        amount: 500,
+        currency: "USD",
+        direction: "credit",
+        method: "cash",
+      })
+      .expect(201);
+
+    const res = await request(app)
+      .get(apiPath("/transactions/balances/senders"))
+      .set(...authHeader(s.token))
+      .expect(200);
+    const row = res.body.find((r: { counterpartyId: string }) => r.counterpartyId === s.senderId);
+    expect(row).toBeDefined();
+    expect(row.debitUsd).toBe(1200);
+    expect(row.creditUsd).toBe(500);
+    expect(row.balanceUsd).toBe(700);
   });
 });
 

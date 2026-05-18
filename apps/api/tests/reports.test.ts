@@ -34,7 +34,7 @@ async function seed(): Promise<Seed> {
     .send({
       carrierId: carrier.body.id,
       carrierFee: { amount: 5000, currency: "USD" },
-      items: [{ lotId: lot.body.id, qty: 4 }],
+      items: [{ lotId: lot.body.id, qty: 4, senderCharge: { amount: 1500, currency: "USD" } }],
     })
     .expect(201);
 
@@ -62,6 +62,7 @@ describe("GET /reports/dashboard", () => {
     expect(res.body.shipmentsByStatus.bekliyor).toBe(1);
     expect(res.body.stockTotal).toBe(16); // 20 - 4 shipped
     expect(res.body.carrierBalanceUsd).toBe(5000);
+    expect(res.body.senderBalanceUsd).toBe(1500);
     expect(res.body.shipmentsByDay.length).toBeGreaterThan(0);
   });
 });
@@ -80,7 +81,7 @@ describe("GET /reports/:type", () => {
     expect(row.balanceUsd).toBe(5000);
   });
 
-  it("senders report tracks lots + qty", async () => {
+  it("senders report tracks lots + charges", async () => {
     const ctx = await seed();
     const res = await request(app)
       .get(apiPath("/reports/senders"))
@@ -89,9 +90,11 @@ describe("GET /reports/:type", () => {
     const row = res.body.find((r: { senderId: string }) => r.senderId === ctx.senderId);
     expect(row.lots).toBe(1);
     expect(row.qtyIn).toBe(20);
+    expect(row.chargesUsd).toBe(1500);
+    expect(row.balanceUsd).toBe(1500); // no payments registered
   });
 
-  it("finance report has one row per tx date", async () => {
+  it("finance report sums carrier + sender debits across the day", async () => {
     const ctx = await seed();
     const res = await request(app)
       .get(apiPath("/reports/finance"))
@@ -99,10 +102,11 @@ describe("GET /reports/:type", () => {
       .expect(200);
     expect(res.body.length).toBeGreaterThan(0);
     const totalDebit = res.body.reduce(
-      (s: number, r: { carrierChargesUsd: number }) => s + r.carrierChargesUsd,
+      (s: number, r: { carrierChargesUsd: number; senderChargesUsd: number }) =>
+        s + r.carrierChargesUsd + r.senderChargesUsd,
       0
     );
-    expect(totalDebit).toBe(5000); // only the carrier_charge debit
+    expect(totalDebit).toBe(6500); // 5000 carrier + 1500 sender
   });
 });
 

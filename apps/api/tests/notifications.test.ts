@@ -209,4 +209,29 @@ describe("Triggers", () => {
     expect(logs[0].recipientRef.chatId).toBe(222);
     expect(logs[0].status).toBe("sent");
   });
+
+  it("sender_payment triggers payment_received notification", async () => {
+    const auth = authHeader(ctx.token);
+
+    await request(app)
+      .post(apiPath("/transactions"))
+      .set(...auth)
+      .send({
+        kind: "sender_payment",
+        counterparty: { type: "sender", id: ctx.senderId },
+        amount: 1500,
+        currency: "USD",
+        direction: "credit",
+        method: "cash",
+      })
+      .expect(201);
+
+    const logs = await NotificationLog.find({
+      orgId: ORG_ID,
+      templateKey: "payment_received",
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].recipientRef.chatId).toBe(111);
+    expect(logs[0].status).toBe("sent");
+  });
 });

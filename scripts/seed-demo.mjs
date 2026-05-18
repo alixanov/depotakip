@@ -16,6 +16,9 @@
 //   DEMO_TAG         default "[DEMO]" — prefix written into `notes`
 //   API_DELAY_MS     default 240 — gap between API calls to stay under
 //                    the global 300/min rate limit
+//   DEMO_IMAGES_DIR  default <repo>/images — folder with seed photos
+//                    (.jpg/.jpeg/.png/.webp). Photos are randomly attached to
+//                    ~70% of lots, 1-3 each.
 //
 // Strategy:
 //   1. Bootstrap exchangeRates for the last 30 days via Mongo (idempotent upsert).
@@ -24,11 +27,15 @@
 //      payments through the REST API so qtyAvailable invariants, shortCode,
 //      auditLog, statusHistory, and auto-generated transactions all populate
 //      via the real code paths.
+//   4. Upload demo photos to lots via multipart POST /lots/:id/photos.
 //
 // Every created doc carries DEMO_TAG in `notes` so clean-demo.mjs can purge it.
 
 import { MongoClient } from "mongodb";
 import { randomUUID } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
   console.error(
@@ -43,6 +50,9 @@ const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/sadiyakargo?replicaSet=rs0";
 const ORG_ID = process.env.DEFAULT_ORG_ID || "000000000000000000000001";
 const DEMO_TAG = process.env.DEMO_TAG || "[DEMO]";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const IMAGES_DIR = process.env.DEMO_IMAGES_DIR || join(__dirname, "..", "images");
 
 // originCheck middleware requires Origin on every non-GET. Must match an entry
 // in the API's CORS_ORIGIN env. Pick the first CORS_ORIGIN entry when available
@@ -76,6 +86,9 @@ const safeJSON = (s) => {
 };
 
 // ---------- demo data palette ----------
+// Mostly Uzbek names (the senders are Uzbekistan-based shippers); a small
+// minority of Turkish names covers the self-shipping branch + Turkish-side
+// brokers that also originate lots.
 const SENDER_NAMES = [
   "Akmal Karimov",
   "Dilshod Tursunov",
@@ -154,21 +167,75 @@ const CITIES = [
   "Konya, Selçuklu",
 ];
 
+// Lot label tails — mix of Uzbek (latin), Russian and a few Turkish, since
+// operators in the UZ warehouse label parcels in whatever they think the
+// downstream Turkish recipient will recognize.
 const NOTES_TAILS = [
-  "el aletleri",
-  "kıyafet partisi",
-  "kozmetik ürünler",
+  // UZ
+  "kuzgi kurtkalar",
+  "asboblar partiyasi",
+  "kosmetika mahsulotlari",
+  "uy to'qimachiligi",
+  "oziq-ovqat to'plami",
+  "telefon aksessuarlari",
+  "oyoq kiyim",
+  "kichik elektronika",
+  "soch parvarishi mahsulotlari",
+  "bolalar o'yinchoqlari",
+  "ayollar sumkalari",
+  "qishloq xo'jaligi asboblari",
+  // RU
+  "осенние куртки",
+  "автозапчасти",
+  "посуда керамика",
+  "хозтовары",
+  "детские игрушки",
+  "косметика партия",
+  "обувь зимняя",
+  "электроника бытовая",
+  // TR
   "ev tekstili",
-  "gıda paketleri",
-  "telefon aksesuarları",
-  "ayakkabı",
-  "küçük elektronik",
   "saç bakım ürünleri",
-  "çocuk oyuncak",
 ];
 
 const uzPhone = () => `+9989${rand(0, 9)}${String(rand(1_000_000, 9_999_999))}`;
 const trPhone = () => `+9055${rand(0, 9)}${String(rand(1_000_000, 9_999_999))}`;
+
+// ---------- demo photos ----------
+const MIME_BY_EXT = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
+
+/**
+ * Loads every supported image from IMAGES_DIR into memory once. Returns
+ * `{ filename, mime, buffer }[]`; empty array if the folder is missing or
+ * contains nothing usable — in that case the photo-upload step no-ops
+ * instead of failing the whole seed.
+ */
+async function loadDemoPhotos() {
+  let entries;
+  try {
+    entries = await readdir(IMAGES_DIR);
+  } catch (err) {
+    console.warn(`[photos] skipping: cannot read ${IMAGES_DIR} (${err.code || err.message})`);
+    return [];
+  }
+  const out = [];
+  for (const name of entries) {
+    const mime = MIME_BY_EXT[extname(name).toLowerCase()];
+    if (!mime) continue;
+    try {
+      const buffer = await readFile(join(IMAGES_DIR, name));
+      out.push({ filename: name, mime, buffer });
+    } catch (err) {
+      console.warn(`[photos] skipping ${name}: ${err.message}`);
+    }
+  }
+  return out;
+}
 
 // ---------- HTTP client ----------
 let accessToken = null;
@@ -177,6 +244,16 @@ let accessToken = null;
 // (~250/min) so a burst of 80 lots + 60 shipments + status changes doesn't
 // hit 429. Tunable via API_DELAY_MS env.
 const API_DELAY_MS = Number(process.env.API_DELAY_MS || 240);
+
+class SeedApiError extends Error {
+  constructor(method, path, status, code, requestId, snippet) {
+    super(`${method} ${path} → HTTP ${status}${code ? ` [${code}]` : ""}: ${snippet}`);
+    this.name = "SeedApiError";
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+  }
+}
 
 async function api(method, path, body, opts = {}) {
   const headers = {
@@ -194,10 +271,55 @@ async function api(method, path, body, opts = {}) {
   const data = text ? safeJSON(text) : null;
   if (!res.ok) {
     const snippet = text ? text.slice(0, 240) : "";
-    throw new Error(`${method} ${path} → HTTP ${res.status}: ${snippet}`);
+    // The API's central error handler returns { error, code, requestId, fields }.
+    // Surfacing all three lets a one-off "POST /shipments → 500" stand out from
+    // the routine 429 churn instead of being swallowed by the catch blocks below.
+    throw new SeedApiError(
+      method,
+      path,
+      res.status,
+      data?.code ?? null,
+      data?.requestId ?? null,
+      snippet
+    );
   }
   if (API_DELAY_MS > 0) await sleep(API_DELAY_MS);
   return data;
+}
+
+/**
+ * Multipart upload helper for POST /lots/:id/photos. The web client uses the
+ * same field name ("photos") and content-type via FormData; we cannot reuse
+ * `api()` because it forces application/json.
+ */
+async function uploadLotPhotos(lotId, files) {
+  const form = new FormData();
+  for (const f of files) {
+    form.append("photos", new Blob([f.buffer], { type: f.mime }), f.filename);
+  }
+  const res = await fetch(`${API_BASE}/lots/${lotId}/photos`, {
+    method: "POST",
+    headers: {
+      // Do NOT set Content-Type — fetch derives the multipart boundary itself.
+      Origin: WEB_ORIGIN,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: form,
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    const data = text ? safeJSON(text) : null;
+    throw new SeedApiError(
+      "POST",
+      `/lots/${lotId}/photos`,
+      res.status,
+      data?.code ?? null,
+      data?.requestId ?? null,
+      text.slice(0, 240)
+    );
+  }
+  if (API_DELAY_MS > 0) await sleep(API_DELAY_MS);
+  return safeJSON(text);
 }
 
 async function login() {
@@ -257,15 +379,23 @@ async function main() {
 
   const client = await MongoClient.connect(MONGODB_URI);
   try {
-    console.log("[1/8] Logging in as admin ...");
+    console.log("[1/9] Logging in as admin ...");
     const user = await login();
-    console.log(`       OK, logged in as ${user.email} (role: ${user.role})`);
+    console.log(`       OK, logged in as ${user.email} (role: ${user.role?.name ?? user.role})`);
 
-    console.log("[2/8] Bootstrapping exchangeRates ...");
+    console.log("[2/9] Bootstrapping exchangeRates ...");
     const added = await seedRates(client);
     console.log(`       inserted ${added} new rate docs (existing dates left intact)`);
 
-    console.log("[3/8] Creating 20 senders via API ...");
+    console.log("[3/9] Loading demo photos ...");
+    const demoPhotos = await loadDemoPhotos();
+    console.log(
+      demoPhotos.length
+        ? `       loaded ${demoPhotos.length} image(s) from ${IMAGES_DIR}`
+        : `       no images found in ${IMAGES_DIR} — lots will be created without photos`
+    );
+
+    console.log("[4/9] Creating 20 senders via API ...");
     const senders = [];
     for (let i = 0; i < 20; i++) {
       const s = await api("POST", "/senders", {
@@ -279,7 +409,7 @@ async function main() {
     }
     console.log(`       created ${senders.length} senders`);
 
-    console.log("[4/8] Creating 10 carriers via API ...");
+    console.log("[5/9] Creating 10 carriers via API ...");
     const carriers = [];
     for (let i = 0; i < 10; i++) {
       const c = await api("POST", "/carriers", {
@@ -293,12 +423,12 @@ async function main() {
     }
     console.log(`       created ${carriers.length} carriers`);
 
-    console.log("[5/8] Creating 80 lots via API (backdated up to 30d) ...");
+    console.log("[6/9] Creating 80 lots via API (backdated up to 30d) ...");
     const lots = [];
     for (let i = 0; i < 80; i++) {
       const sender = pick(senders);
       const tail = pick(NOTES_TAILS);
-      // Label = "<sender first name> — <tail phrase>" (Turkish-style).
+      // Label = "<sender first name> — <tail phrase>" (UZ/RU/TR mix).
       const label = `${sender.fullName.split(" ")[0]} — ${tail}`;
       // unitPrice realistic per currency: USD $5–$80 → 500–8000 cents,
       // TRY ₺50–₺2000 → 5000–200000 kuruş, UZS 50k–2M soum → 5M–200M tiyin.
@@ -321,8 +451,44 @@ async function main() {
     }
     console.log(`       created ${lots.length} lots`);
 
-    console.log("[6/8] Creating up to 60 shipments via API ...");
+    console.log("[7/9] Attaching photos to lots ...");
+    let lotsWithPhotos = 0;
+    let photoFailReal = 0;
+    if (demoPhotos.length === 0) {
+      console.log("       skipped — no demo images available");
+    } else {
+      for (const lot of lots) {
+        // ~70% of lots get a photo set; size = 1..min(3, available)
+        if (Math.random() >= 0.7) continue;
+        const count = rand(1, Math.min(3, demoPhotos.length));
+        const picks = shuffle(demoPhotos).slice(0, count);
+        try {
+          await uploadLotPhotos(lot.id, picks);
+          lotsWithPhotos++;
+        } catch (e) {
+          if (e.status !== 429) photoFailReal++;
+          console.warn(
+            `       ! photo upload for ${lot.id} failed: status=${e.status ?? "?"} code=${e.code ?? "?"} :: ${e.message}`
+          );
+        }
+      }
+      console.log(`       attached photos to ${lotsWithPhotos}/${lots.length} lots`);
+      // Same 10% threshold as shipments below — anything more than that
+      // signals an upload-pipeline problem worth investigating.
+      if (lotsWithPhotos > 0 && photoFailReal / Math.max(1, lotsWithPhotos + photoFailReal) > 0.1) {
+        console.error(
+          `[warn] ${photoFailReal} non-429 photo upload failures — check the API logs.`
+        );
+      }
+    }
+
+    console.log("[8/9] Creating up to 60 shipments via API ...");
     const shipments = [];
+    // 429 from the global rate limit is expected churn; everything else
+    // (validation, 500, etc.) is a real bug we should surface — count
+    // non-rate-limit failures and abort if the rate is suspiciously high.
+    let shipFailReal = 0;
+    let shipAttempted = 0;
     const localAvail = new Map(lots.map((l) => [l.id, l.qtyIn]));
     for (let i = 0; i < 60; i++) {
       const available = lots.filter((l) => (localAvail.get(l.id) || 0) > 0);
@@ -362,8 +528,13 @@ async function main() {
           { idempotencyKey: randomUUID() }
         );
         shipments.push(sh);
+        shipAttempted++;
       } catch (e) {
-        console.warn(`       ! shipment #${i + 1} failed: ${e.message}`);
+        shipAttempted++;
+        if (e.status !== 429) shipFailReal++;
+        console.warn(
+          `       ! shipment #${i + 1} failed: status=${e.status ?? "?"} code=${e.code ?? "?"} reqId=${e.requestId ?? "-"} :: ${e.message}`
+        );
         // Roll back local-availability bookkeeping so subsequent picks stay sane.
         for (const it of items) {
           localAvail.set(it.lotId, (localAvail.get(it.lotId) || 0) + it.qty);
@@ -373,8 +544,17 @@ async function main() {
     console.log(
       `       created ${shipments.length} shipments (shortCodes: ${shipments[0]?.shortCode}..${shipments[shipments.length - 1]?.shortCode})`
     );
+    // Fail loudly when something genuine breaks. Rate-limit (429) churn is
+    // tolerated; anything else above the 10% threshold means the seed should
+    // not be reported as "successful" with a green prompt.
+    if (shipAttempted > 0 && shipFailReal / shipAttempted > 0.1) {
+      console.error(
+        `[fatal] ${shipFailReal}/${shipAttempted} shipment-creates failed with non-429 errors — aborting.`
+      );
+      process.exit(1);
+    }
 
-    console.log("[7/8] Walking shipments through realistic status transitions ...");
+    console.log("       Walking shipments through realistic status transitions ...");
     const counts = { teslim: 0, yolda: 0, bekliyor: 0, kayip: 0, borclu: 0, iptal: 0 };
     for (const sh of shipments) {
       const r = Math.random();
@@ -437,7 +617,7 @@ async function main() {
     }
     console.log(`       status distribution:`, counts);
 
-    console.log("[8/8] Registering partial payments via API ...");
+    console.log("[9/9] Registering partial payments via API ...");
     const carrierBal = await api("GET", "/transactions/balances/carriers");
     const senderBal = await api("GET", "/transactions/balances/senders");
     let payCount = 0;
@@ -494,12 +674,13 @@ async function main() {
     console.log(`       registered ${payCount} additional payments`);
 
     console.log("\n=== Done ===");
-    console.log(`  senders:   ${senders.length}`);
-    console.log(`  carriers:  ${carriers.length}`);
-    console.log(`  lots:      ${lots.length}`);
-    console.log(`  shipments: ${shipments.length}`);
-    console.log(`  statuses:  ${JSON.stringify(counts)}`);
-    console.log(`  payments:  ${payCount}`);
+    console.log(`  senders:        ${senders.length}`);
+    console.log(`  carriers:       ${carriers.length}`);
+    console.log(`  lots:           ${lots.length}`);
+    console.log(`  lots w/photos:  ${lotsWithPhotos}`);
+    console.log(`  shipments:      ${shipments.length}`);
+    console.log(`  statuses:       ${JSON.stringify(counts)}`);
+    console.log(`  payments:       ${payCount}`);
   } finally {
     await client.close();
   }

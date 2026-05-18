@@ -81,7 +81,14 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
   try {
     let created;
     await session.withTransaction(async () => {
-      // 1. lock-and-decrement every lot
+      // 1. lock-and-decrement every lot AND capture senderId for step 4.
+      // Building the lotSenderMap from the decrement result is critical:
+      // a second findById without tenantFilter+deletedAt would let a forged
+      // or soft-deleted lotId silently bypass sender_charge generation
+      // (the lookup returns null → "if (!senderId) continue" swallows the
+      // money). Sourcing from `updated` reuses the org/deletedAt invariants
+      // already enforced here.
+      const lotSenderMap = new Map<string, string>();
       for (const item of input.items) {
         const lotId = new Types.ObjectId(item.lotId);
         const updated = await InboundLot.findOneAndUpdate(
@@ -97,6 +104,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
         if (!updated) {
           throw conflict(`Yetersiz stok: parti ${item.lotId} (istenen ${item.qty})`);
         }
+        lotSenderMap.set(item.lotId, updated.senderId.toString());
         const newStatus = updated.qtyAvailable === 0 ? "fully_shipped" : "partially_shipped";
         await InboundLot.updateOne(
           { _id: lotId, session },
@@ -110,12 +118,7 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
       const seq = await nextSequence(`shipment_${year}`, session);
       const shortCode = `SH-${year}-${String(seq).padStart(5, "0")}`;
 
-      // 3. insert shipment + auto-generated financial transactions
-      const lotSenderMap = new Map<string, string>();
-      for (const item of input.items) {
-        const lot = await InboundLot.findById(item.lotId, null, { session });
-        if (lot) lotSenderMap.set(item.lotId, lot.senderId.toString());
-      }
+      // 3. insert shipment + auto-generated financial transactions below.
 
       const [doc] = await Shipment.create(
         [
@@ -167,7 +170,12 @@ export async function create(orgId: string, userId: string, input: CreateShipmen
       for (const item of input.items) {
         if (!item.senderCharge) continue;
         const senderId = lotSenderMap.get(item.lotId);
-        if (!senderId) continue;
+        if (!senderId) {
+          // Defensive: step 1 populated the map for every item — a miss here
+          // is a code-path bug, not user input. Throwing aborts the
+          // transaction (qtyAvailable rollbacks) instead of swallowing.
+          throw new Error(`lotSenderMap missing entry for lot ${item.lotId}`);
+        }
         await createTx(
           orgId,
           {

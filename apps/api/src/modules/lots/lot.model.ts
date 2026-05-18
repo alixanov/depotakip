@@ -1,4 +1,4 @@
-import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
+import mongoose, { Schema, Types, type Document, type Model } from "mongoose";
 import type { Currency, LotStatus } from "@sadiyakargo/shared";
 
 interface PhotoRef {
@@ -43,7 +43,6 @@ export interface LotDoc extends Document {
     status: LotStatus;
     photos: {
       id: string;
-      storageKey: string;
       mimeType: string;
       sizeBytes: number;
       width?: number;
@@ -115,8 +114,15 @@ lotSchema.methods.toClient = function toClient() {
     notes: this.notes,
     status: this.status,
     photos: this.photos.map((p: PhotoRef) => ({
-      id: p._id.toString(),
-      storageKey: p.storageKey,
+      // Defensive: photos[] sub-schema dropped `{_id:false}`, so Mongoose
+      // mints `_id` for new docs — but any pre-existing element written
+      // before that change lacks `_id` entirely. Synthesise a fresh one
+      // rather than throwing on `.toString()`; the consumer just sees a
+      // stable id within this response.
+      id: p._id ? p._id.toString() : new Types.ObjectId().toString(),
+      // `storageKey` is intentionally NOT exposed — clients fetch through
+      // `GET /lots/:id/photos/:photoId` which returns a presigned URL, so
+      // the S3 key layout stays internal.
       mimeType: p.mimeType,
       sizeBytes: p.sizeBytes,
       ...(p.width !== undefined ? { width: p.width } : {}),

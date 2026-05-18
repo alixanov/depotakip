@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import sharp from "sharp";
-import { app, apiPath, authHeader, loginAs, request } from "./helpers.ts";
+import { app, apiPath, authHeader, loginAs, ORG_ID, request } from "./helpers.ts";
 import type { SystemRoleName } from "@sadiyakargo/shared";
 
 // In-memory replacement for src/lib/storage.ts. Lets us assert puts/deletes
@@ -209,11 +209,13 @@ describe("/lots/:id/photos", () => {
       .attach("photos", tinyJpeg, { filename: "b.jpg", contentType: "image/jpeg" })
       .expect(201);
     expect(res.body.photos).toHaveLength(2);
+    // storageKey is server-internal (not exposed via API); we instead check
+    // that the predictable key path landed in the fake S3 store.
     for (const p of res.body.photos) {
       expect(p.id).toMatch(/^[0-9a-f]{24}$/);
       expect(p.mimeType).toBe("image/jpeg");
-      expect(p.storageKey).toContain(`lots/${lotId}/photos/${p.id}.jpg`);
-      expect(fakeStore.has(p.storageKey)).toBe(true);
+      const expectedKey = `orgs/${ORG_ID.toString()}/lots/${lotId}/photos/${p.id}.jpg`;
+      expect(fakeStore.has(expectedKey)).toBe(true);
     }
   });
 
@@ -338,8 +340,8 @@ describe("/lots/:id/photos", () => {
       .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
       .expect(201);
     const photoId = upload.body.photos[0].id;
-    const storageKey = upload.body.photos[0].storageKey;
-    expect(fakeStore.has(storageKey)).toBe(true);
+    const expectedKey = `orgs/${ORG_ID.toString()}/lots/${lotId}/photos/${photoId}.jpg`;
+    expect(fakeStore.has(expectedKey)).toBe(true);
 
     await request(app)
       .delete(apiPath(`/lots/${lotId}/photos/${photoId}`))
@@ -352,7 +354,54 @@ describe("/lots/:id/photos", () => {
       .set(...authHeader(admin.accessToken))
       .expect(200);
     expect(res.body.photos).toHaveLength(0);
-    expect(fakeStore.has(storageKey)).toBe(false);
+    expect(fakeStore.has(expectedKey)).toBe(false);
+  });
+
+  it("firstPhotoUrl: list returns presigned URL when photos[] is non-empty", async () => {
+    await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .expect(201);
+
+    const list = await request(app)
+      .get(apiPath(`/lots?available=true`))
+      .set(...authHeader(ctx.token))
+      .expect(200);
+    const row = list.body.data.find((l: { id: string }) => l.id === lotId);
+    expect(row).toBeDefined();
+    expect(typeof row.firstPhotoUrl).toBe("string");
+    expect(row.firstPhotoUrl).toMatch(/^https:\/\/mock-s3\.local\//);
+  });
+
+  it("firstPhotoUrl: lot without photos has no firstPhotoUrl", async () => {
+    const list = await request(app)
+      .get(apiPath(`/lots?available=true`))
+      .set(...authHeader(ctx.token))
+      .expect(200);
+    const row = list.body.data.find((l: { id: string }) => l.id === lotId);
+    expect(row).toBeDefined();
+    expect(row.firstPhotoUrl).toBeUndefined();
+  });
+
+  it("firstPhotoUrl: reorderPhotos updates URL to the new photos[0]", async () => {
+    const upload = await request(app)
+      .post(apiPath(`/lots/${lotId}/photos`))
+      .set(...authHeader(ctx.token))
+      .attach("photos", tinyJpeg, { filename: "a.jpg", contentType: "image/jpeg" })
+      .attach("photos", tinyJpeg, { filename: "b.jpg", contentType: "image/jpeg" })
+      .expect(201);
+    const [first, second] = upload.body.photos as Array<{ id: string }>;
+    const beforeKey = `orgs/${ORG_ID.toString()}/lots/${lotId}/photos/${first.id}.jpg`;
+    const afterKey = `orgs/${ORG_ID.toString()}/lots/${lotId}/photos/${second.id}.jpg`;
+    expect(upload.body.firstPhotoUrl).toContain(beforeKey);
+
+    const reorder = await request(app)
+      .patch(apiPath(`/lots/${lotId}/photos/order`))
+      .set(...authHeader(ctx.token))
+      .send({ photoIds: [second.id, first.id] })
+      .expect(200);
+    expect(reorder.body.firstPhotoUrl).toContain(afterKey);
   });
 });
 
