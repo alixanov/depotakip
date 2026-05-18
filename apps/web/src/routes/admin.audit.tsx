@@ -150,6 +150,41 @@ function AuditPage() {
             loading={query.isLoading}
             error={query.error as Error | null}
             rowKey={(r) => r.id}
+            renderCard={(r) => (
+              <div className="space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 font-semibold">
+                        {t(`admin:audit_action_${r.action}`, { defaultValue: r.action })}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {t(`admin:audit_entity_${r.entityType}`, { defaultValue: r.entityType })}
+                      </span>
+                      {r.entityId && (
+                        <code className="text-[10px] text-muted-foreground">
+                          /{r.entityId.slice(-6)}
+                        </code>
+                      )}
+                    </div>
+                    {r.userId && (
+                      <p className="mt-0.5 text-xs">
+                        <span className="font-medium">{r.userFullName ?? r.userId.slice(-6)}</span>
+                        {r.userEmail && (
+                          <span className="ml-1 text-[10px] text-muted-foreground">
+                            {r.userEmail}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">{formatDateTime(r.at)}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setSelected(r)}>
+                    Diff
+                  </Button>
+                </div>
+              </div>
+            )}
             empty={t("empty")}
           />
           <PaginationBar pagination={query.data?.pagination} onChange={setPage} />

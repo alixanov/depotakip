@@ -30,7 +30,7 @@ export function PageHeader({ title, subtitle, actions, eyebrow, className }: Pag
             {eyebrow}
           </div>
         )}
-        <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground sm:text-base">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

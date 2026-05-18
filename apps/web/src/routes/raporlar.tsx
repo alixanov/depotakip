@@ -107,7 +107,9 @@ function ReportsPage() {
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <TabsList className="flex-wrap">
+      {/* Horizontal scroll instead of flex-wrap — 5 Turkish labels at 375px
+          mobile previously broke into 2 rows and looked broken. */}
+      <TabsList className="w-full overflow-x-auto">
         <TabsTrigger value="dashboard">{t("raporlar:tab_dashboard")}</TabsTrigger>
         <TabsTrigger value="carriers">{t("raporlar:tab_carriers")}</TabsTrigger>
         <TabsTrigger value="senders">{t("raporlar:tab_senders")}</TabsTrigger>

@@ -171,9 +171,15 @@ function AppLayout() {
             </nav>
           )}
 
-          {/* Right cluster */}
+          {/* Right cluster: CommandPalette hidden on mobile (global ⌘K still
+              works); LanguageSwitcher + ThemeToggle stay compact. Avatar always
+              fits because every other control collapses or hides. */}
           <div className="ml-auto flex items-center gap-1.5">
-            {user && <CommandPalette />}
+            {user && (
+              <div className="hidden md:block">
+                <CommandPalette />
+              </div>
+            )}
             <LanguageSwitcher />
             <ThemeToggle />
             {user && <UserMenu user={user} onLogout={() => setLogoutOpen(true)} />}

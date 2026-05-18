@@ -120,23 +120,32 @@ function UsersPage() {
           {usersQuery.error && (
             <p className="p-4 text-sm text-destructive">{(usersQuery.error as Error).message}</p>
           )}
-          {usersQuery.data && (
-            <table className="w-full text-sm">
-              <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="p-3">{t("admin:col_name")}</th>
-                  <th className="p-3">{t("admin:col_email")}</th>
-                  <th className="p-3">{t("admin:col_role")}</th>
-                  <th className="p-3">{t("admin:col_status")}</th>
-                  <th className="p-3 text-right">{t("actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
+          {usersQuery.data && usersQuery.data.data.length === 0 && (
+            <p className="p-4 text-center text-sm text-muted-foreground">
+              {t("admin:no_users_yet")}
+            </p>
+          )}
+          {usersQuery.data && usersQuery.data.data.length > 0 && (
+            <>
+              {/* Mobile cards: stack name + email + role select + active toggle + delete. */}
+              <ul className="divide-y md:hidden">
                 {usersQuery.data.data.map((u: User) => (
-                  <tr key={u.id} className="border-b last:border-0">
-                    <td className="p-3 font-medium">{u.fullName}</td>
-                    <td className="p-3 text-muted-foreground">{u.email}</td>
-                    <td className="p-3">
+                  <li key={u.id} className="space-y-2 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{u.fullName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setConfirmUser(u)}
+                        aria-label={`${t("delete")} — ${u.email}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <select
                         value={u.role}
                         onChange={(e) =>
@@ -145,7 +154,7 @@ function UsersPage() {
                             data: { role: e.target.value as Role },
                           })
                         }
-                        className="rounded-md border bg-background px-2 py-1 text-sm"
+                        className="h-9 rounded-md border bg-background px-2 text-xs"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -153,8 +162,6 @@ function UsersPage() {
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td className="p-3">
                       <button
                         type="button"
                         onClick={() =>
@@ -165,34 +172,86 @@ function UsersPage() {
                         }
                         className={
                           u.active
-                            ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700"
-                            : "rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600"
+                            ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700"
+                            : "rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
                         }
                       >
                         {u.active ? t("admin:active") : t("admin:inactive")}
                       </button>
-                    </td>
-                    <td className="p-3 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setConfirmUser(u)}
-                        aria-label={`${t("delete")} — ${u.email}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </td>
-                  </tr>
+                    </div>
+                  </li>
                 ))}
-                {usersQuery.data.data.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-4 text-center text-muted-foreground">
-                      {t("admin:no_users_yet")}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              </ul>
+
+              {/* Desktop table: unchanged behavior, just hidden on mobile. */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="p-3">{t("admin:col_name")}</th>
+                      <th className="p-3">{t("admin:col_email")}</th>
+                      <th className="p-3">{t("admin:col_role")}</th>
+                      <th className="p-3">{t("admin:col_status")}</th>
+                      <th className="p-3 text-right">{t("actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersQuery.data.data.map((u: User) => (
+                      <tr key={u.id} className="border-b last:border-0">
+                        <td className="p-3 font-medium">{u.fullName}</td>
+                        <td className="p-3 text-muted-foreground">{u.email}</td>
+                        <td className="p-3">
+                          <select
+                            value={u.role}
+                            onChange={(e) =>
+                              updateMutation.mutate({
+                                id: u.id,
+                                data: { role: e.target.value as Role },
+                              })
+                            }
+                            className="rounded-md border bg-background px-2 py-1 text-sm"
+                          >
+                            {ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {r}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateMutation.mutate({
+                                id: u.id,
+                                data: { active: !u.active },
+                              })
+                            }
+                            className={
+                              u.active
+                                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700"
+                                : "rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600"
+                            }
+                          >
+                            {u.active ? t("admin:active") : t("admin:inactive")}
+                          </button>
+                        </td>
+                        <td className="p-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setConfirmUser(u)}
+                            aria-label={`${t("delete")} — ${u.email}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -156,7 +156,10 @@ function CreateShipmentPage() {
         <CardTitle>{t("cikis:title")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* pb-24 on mobile reserves space for the sticky submit bar at bottom-16
+            (above the bottom-nav). Without it, the last field is permanently
+            occluded when the form is short. */}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-24 md:pb-4">
           <FormError>{serverError}</FormError>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -260,8 +263,11 @@ function CreateShipmentPage() {
               const overAvailable = !!lot && qty > lot.qtyAvailable;
               return (
                 <div key={field.id} className="rounded-md border p-3">
-                  <div className="grid grid-cols-[1fr_120px_40px] items-start gap-2">
-                    <div>
+                  {/* Mobile (< sm): lot + qty stack vertically with delete at top-right.
+                      Desktop: 3-col grid stays as before. The min-w-0 wrapper
+                      keeps the Combobox from forcing horizontal scroll on 375. */}
+                  <div className="grid grid-cols-[1fr_44px] items-start gap-2 sm:grid-cols-[1fr_120px_40px]">
+                    <div className="min-w-0">
                       <Controller
                         name={`items.${idx}.lotId`}
                         control={form.control}
@@ -307,7 +313,18 @@ function CreateShipmentPage() {
                       />
                       <FieldError>{form.formState.errors.items?.[idx]?.lotId?.message}</FieldError>
                     </div>
-                    <div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={fields.length === 1}
+                      onClick={() => remove(idx)}
+                      aria-label={t("cikis:items_remove")}
+                      className="sm:order-3"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                    <div className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                       <Controller
                         name={`items.${idx}.qty`}
                         control={form.control}
@@ -337,18 +354,8 @@ function CreateShipmentPage() {
                       )}
                       <FieldError>{form.formState.errors.items?.[idx]?.qty?.message}</FieldError>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      disabled={fields.length === 1}
-                      onClick={() => remove(idx)}
-                      aria-label={t("cikis:items_remove")}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
                   </div>
-                  <div className="mt-2 grid grid-cols-[1fr_120px_40px] gap-2">
+                  <div className="mt-2 grid grid-cols-[1fr_120px] gap-2 sm:grid-cols-[1fr_120px_40px]">
                     <div>
                       <Label className="text-[11px] text-muted-foreground">
                         {t("cikis:sender_charge")}

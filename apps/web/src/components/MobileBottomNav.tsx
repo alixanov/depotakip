@@ -1,12 +1,18 @@
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
+  Bell,
   Coins,
   FileBarChart,
   LogOut,
   Menu,
   Package,
+  ScrollText,
+  ShieldCheck,
+  Tag,
   Truck,
+  Users as UsersIcon,
+  UserCircle,
   Warehouse,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -75,15 +81,19 @@ export function MobileBottomNav() {
               {t("nav:all_pages")}
             </p>
             <ul className="space-y-1">
+              {/* Overflow from the 5-tab bottom nav: track + reports always show. */}
               <DrawerLink to="/takip" onClose={close} icon={<Package />}>
                 {t("nav:track")}
               </DrawerLink>
               <DrawerLink to="/raporlar" onClose={close} icon={<FileBarChart />}>
                 {t("nav:reports")}
               </DrawerLink>
+
+              {/* Operator+ section: counterparty management. */}
               {canMutate && (
                 <>
-                  <DrawerLink to="/admin/senders" onClose={close} icon={<Truck />}>
+                  <DrawerSectionLabel>{t("nav:manage")}</DrawerSectionLabel>
+                  <DrawerLink to="/admin/senders" onClose={close} icon={<UsersIcon />}>
                     {t("nav:senders")}
                   </DrawerLink>
                   <DrawerLink to="/admin/carriers" onClose={close} icon={<Truck />}>
@@ -91,26 +101,31 @@ export function MobileBottomNav() {
                   </DrawerLink>
                 </>
               )}
+
+              {/* Admin-only section: reference data + system. */}
               {isAdmin && (
                 <>
-                  <DrawerLink to="/admin/categories" onClose={close} icon={<Coins />}>
+                  <DrawerSectionLabel>{t("profile:info_role")}: admin</DrawerSectionLabel>
+                  <DrawerLink to="/admin/categories" onClose={close} icon={<Tag />}>
                     {t("nav:categories")}
                   </DrawerLink>
                   <DrawerLink to="/admin/exchange-rates" onClose={close} icon={<Coins />}>
                     {t("nav:rates")}
                   </DrawerLink>
-                  <DrawerLink to="/admin/users" onClose={close} icon={<Truck />}>
+                  <DrawerLink to="/admin/users" onClose={close} icon={<ShieldCheck />}>
                     {t("nav:users")}
                   </DrawerLink>
-                  <DrawerLink to="/admin/notifications" onClose={close} icon={<Truck />}>
+                  <DrawerLink to="/admin/notifications" onClose={close} icon={<Bell />}>
                     {t("nav:notifications")}
                   </DrawerLink>
-                  <DrawerLink to="/admin/audit" onClose={close} icon={<Truck />}>
+                  <DrawerLink to="/admin/audit" onClose={close} icon={<ScrollText />}>
                     {t("nav:audit")}
                   </DrawerLink>
                 </>
               )}
-              <DrawerLink to="/profile" onClose={close} icon={<Package />}>
+
+              <DrawerSectionLabel>{t("profile")}</DrawerSectionLabel>
+              <DrawerLink to="/profile" onClose={close} icon={<UserCircle />}>
                 {t("profile")}
               </DrawerLink>
               <li>
@@ -205,6 +220,18 @@ function DrawerLink({
         <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
         {children}
       </Link>
+    </li>
+  );
+}
+
+/** Small uppercase label that splits the drawer into logical sections. */
+function DrawerSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <li
+      role="presentation"
+      className="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground"
+    >
+      {children}
     </li>
   );
 }

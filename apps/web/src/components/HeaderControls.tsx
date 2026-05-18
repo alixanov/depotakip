@@ -82,7 +82,7 @@ export function LanguageSwitcher({ variant = "surface" }: { variant?: Variant })
               : "border-input bg-background text-foreground hover:border-primary/40 hover:bg-primary-soft hover:text-primary-soft-foreground data-[state=open]:border-primary/40 data-[state=open]:bg-primary-soft data-[state=open]:text-primary-soft-foreground"
           )}
         >
-          <Globe className="h-3.5 w-3.5 opacity-70 transition-opacity group-hover:opacity-100" />
+          <Globe className="hidden h-3.5 w-3.5 opacity-70 transition-opacity group-hover:opacity-100 sm:inline" />
           <span
             aria-hidden="true"
             className={cn(
@@ -92,9 +92,14 @@ export function LanguageSwitcher({ variant = "surface" }: { variant?: Variant })
           >
             <FlagIcon code={current.code} className="h-full w-full" />
           </span>
-          <span className="tabular-nums tracking-wide">{current.code.toUpperCase()}</span>
+          {/* On mobile (<sm) we collapse to flag-only so the header fits at
+              375px without the avatar getting clipped — Globe + "TR" + chevron
+              alone consume ~70px. The dropdown still opens via the button. */}
+          <span className="hidden tabular-nums tracking-wide sm:inline">
+            {current.code.toUpperCase()}
+          </span>
           <ChevronDown
-            className="h-3 w-3 opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180"
+            className="hidden h-3 w-3 opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180 sm:inline"
             aria-hidden="true"
           />
         </button>

@@ -116,6 +116,31 @@ function CarriersPage() {
             loading={query.isLoading}
             error={query.error as Error | null}
             rowKey={(c) => c.id}
+            renderCard={(c) => (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {c.firstName} {c.lastName}
+                  </p>
+                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{c.phone}</p>
+                  {c.deliveryAddressTr && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {c.deliveryAddressTr}
+                    </p>
+                  )}
+                </div>
+                {role === "admin" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setConfirmId(c.id)}
+                    aria-label={t("delete")}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            )}
             empty={
               <EmptyState
                 icon={<Truck />}

@@ -122,6 +122,34 @@ function SendersPage() {
             loading={query.isLoading}
             error={query.error as Error | null}
             rowKey={(s) => s.id}
+            renderCard={(s) => (
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{s.fullName}</p>
+                    {s.isSelf && (
+                      <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                        {t("admin:type_self")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{s.phone}</p>
+                  {s.address && (
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.address}</p>
+                  )}
+                </div>
+                {role === "admin" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setConfirmId(s.id)}
+                    aria-label={t("delete")}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            )}
             empty={
               <EmptyState
                 icon={<Users />}

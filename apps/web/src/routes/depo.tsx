@@ -238,6 +238,40 @@ function LotsTab() {
             loading={lotsQuery.isLoading}
             error={lotsQuery.error as Error | null}
             rowKey={(l) => l.id}
+            renderCard={(l) => (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{senderName(l.senderId)}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {categoryName(l.categoryId)} · {formatDate(l.receivedAt)}
+                    </p>
+                  </div>
+                  <LotStatusPill status={l.status} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm tabular-nums">
+                    <span className="font-bold">{l.qtyAvailable}</span>
+                    <span className="text-muted-foreground"> / {l.qtyIn}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => downloadReceiptPdf(l.id)}
+                      aria-label={t("depo:pdf_aria")}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    {role === "admin" && l.qtyAvailable === l.qtyIn && (
+                      <Button variant="ghost" size="icon" onClick={() => setConfirmId(l.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             empty={t("depo:empty")}
           />
           <PaginationBar pagination={lotsQuery.data?.pagination} onChange={setPage} />

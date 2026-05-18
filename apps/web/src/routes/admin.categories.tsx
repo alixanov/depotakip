@@ -131,6 +131,40 @@ function CategoriesPage() {
             loading={query.isLoading}
             error={query.error as Error | null}
             rowKey={(c) => c.id}
+            renderCard={(c) => (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="text-2xl">{c.icon || "📦"}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("admin:col_sort")}: {c.sortOrder}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleActive.mutate({ id: c.id, active: !c.active })}
+                    className={
+                      c.active
+                        ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                        : "rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                    }
+                  >
+                    {c.active ? t("admin:active") : t("admin:inactive")}
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setConfirmId(c.id)}
+                    aria-label={t("delete")}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            )}
             empty={
               <EmptyState
                 icon={<Tag />}

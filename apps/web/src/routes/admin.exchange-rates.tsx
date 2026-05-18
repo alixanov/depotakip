@@ -105,6 +105,29 @@ function ExchangeRatesPage() {
             loading={query.isLoading}
             error={query.error as Error | null}
             rowKey={(r) => r.id}
+            renderCard={(r) => (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-bold">{r.currency}</span>
+                    <code className="text-xs tabular-nums text-muted-foreground">
+                      {r.rateToUsd}
+                    </code>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {r.rateDate} · {r.source}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setConfirmId(r.id)}
+                  aria-label={t("delete")}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            )}
             empty={
               <EmptyState
                 icon={<Coins />}
