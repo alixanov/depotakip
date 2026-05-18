@@ -144,10 +144,11 @@ function CreateShipmentPage() {
   const lotLabel = (lotId: string): string => {
     const lot = lotsQuery.data?.data.find((l) => l.id === lotId);
     if (!lot) return "—";
-    return t("cikis:items_label_per_lot", {
+    const meta = t("cikis:items_label_per_lot", {
       qty: lot.qtyAvailable,
       date: formatDate(lot.receivedAt),
     });
+    return lot.label ? `${lot.label} — ${meta}` : meta;
   };
 
   return (
@@ -277,19 +278,21 @@ function CreateShipmentPage() {
                             value={field.value || ""}
                             onChange={field.onChange}
                             getValue={(l) => l.id}
-                            // Visible label = id suffix + short context; full search keys add date.
-                            getLabel={(l) => `#${l.id.slice(-6)}`}
+                            // Visible label prefers the human label; falls back to id suffix.
+                            getLabel={(l) => l.label || `#${l.id.slice(-6)}`}
                             getSearchKeys={(l) => [
+                              l.label,
                               formatDate(l.receivedAt),
                               String(l.qtyAvailable),
                             ]}
                             renderOption={(l) => (
                               <div className="flex min-w-0 items-baseline justify-between gap-2">
-                                <span className="truncate">
+                                <span className="min-w-0 truncate">
                                   <span className="font-mono text-xs text-muted-foreground">
                                     #{l.id.slice(-6)}
                                   </span>{" "}
-                                  <span className="font-medium">
+                                  {l.label && <span className="font-medium">{l.label} · </span>}
+                                  <span className={l.label ? "" : "font-medium"}>
                                     {l.qtyAvailable} {t("depo:form_qty").toLowerCase()}
                                   </span>
                                 </span>

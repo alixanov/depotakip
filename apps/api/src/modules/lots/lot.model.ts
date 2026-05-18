@@ -20,6 +20,7 @@ export interface LotDoc extends Document {
   orgId: Types.ObjectId;
   senderId: Types.ObjectId;
   categoryId: Types.ObjectId;
+  label: string;
   qtyIn: number;
   qtyAvailable: number;
   unitPrice: UnitPrice | null;
@@ -34,6 +35,7 @@ export interface LotDoc extends Document {
     id: string;
     senderId: string;
     categoryId: string;
+    label: string;
     qtyIn: number;
     qtyAvailable: number;
     unitPrice: UnitPrice | null;
@@ -51,6 +53,7 @@ const lotSchema = new Schema<LotDoc>(
     orgId: { type: Schema.Types.ObjectId, required: true, index: true },
     senderId: { type: Schema.Types.ObjectId, ref: "Sender", required: true },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", required: true },
+    label: { type: String, default: "" },
     qtyIn: { type: Number, required: true, min: 1 },
     qtyAvailable: { type: Number, required: true, min: 0 },
     unitPrice: {
@@ -100,6 +103,7 @@ lotSchema.methods.toClient = function toClient() {
     id: this._id.toString(),
     senderId: this.senderId.toString(),
     categoryId: this.categoryId.toString(),
+    label: this.label ?? "",
     qtyIn: this.qtyIn,
     qtyAvailable: this.qtyAvailable,
     unitPrice: this.unitPrice,

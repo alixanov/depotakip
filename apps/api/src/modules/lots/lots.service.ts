@@ -52,6 +52,7 @@ export async function create(orgId: string, input: CreateLotInput) {
     orgId: new Types.ObjectId(orgId),
     senderId: sender._id,
     categoryId: category._id,
+    label: input.label ?? "",
     qtyIn: input.qtyIn,
     qtyAvailable: input.qtyIn,
     unitPrice: input.unitPrice ?? null,
@@ -63,10 +64,15 @@ export async function create(orgId: string, input: CreateLotInput) {
 }
 
 export async function update(orgId: string, id: string, input: UpdateLotInput) {
-  // Per TZ: only `notes` is mutable once the lot is in.
+  // Per TZ: qty/photo/price are immutable once the lot is in (qtyAvailable
+  // is decremented atomically by shipment txns). Only the human-facing
+  // metadata — label and notes — can be corrected.
+  const $set: Record<string, unknown> = {};
+  if (input.label !== undefined) $set.label = input.label;
+  if (input.notes !== undefined) $set.notes = input.notes;
   const doc = await InboundLot.findOneAndUpdate(
     tenantFilter(orgId, { _id: new Types.ObjectId(id) }),
-    { $set: { notes: input.notes ?? "" } },
+    { $set },
     { new: true, runValidators: true }
   );
   if (!doc) throw notFound("Parti bulunamadı");

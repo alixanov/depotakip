@@ -1,43 +1,57 @@
 #!/usr/bin/env node
 // scripts/seed-demo.mjs
 //
-// Demo data seeder for sadiyakargo. Required env:
-//   API_BASE         e.g. https://api.example.com/api/v1
-//   ADMIN_EMAIL      admin login
-//   ADMIN_PASSWORD   admin password
-//   MONGODB_URI      mongodb+srv://...
-// Optional:
+// Demo data seeder for sadiyakargo. Tuned for LOCAL DEV by default —
+// reads admin creds + MONGODB_URI from apps/api/.env when run via
+// `npm run seed:demo` (which passes --env-file=apps/api/.env to Node).
+//
+// Env (all optional except admin creds):
+//   API_BASE         default http://localhost:4000/api/v1
+//   MONGODB_URI      default mongodb://localhost:27017/sadiyakargo?replicaSet=rs0
+//   WEB_ORIGIN       default first entry of CORS_ORIGIN (or http://localhost:3000
+//                    when API_BASE is localhost) — must satisfy api/originCheck
+//   ADMIN_EMAIL      required — admin login (seeded by migration 4)
+//   ADMIN_PASSWORD   required — admin password
 //   DEFAULT_ORG_ID   default 000000000000000000000001
 //   DEMO_TAG         default "[DEMO]" — prefix written into `notes`
+//   API_DELAY_MS     default 240 — gap between API calls to stay under
+//                    the global 300/min rate limit
 //
 // Strategy:
 //   1. Bootstrap exchangeRates for the last 30 days via Mongo (idempotent upsert).
 //   2. Log in to API as admin.
-//   3. Create senders, carriers, lots, shipments, payments through the REST API
-//      so qtyAvailable invariants, shortCode, auditLog, statusHistory, and
-//      auto-generated transactions all populate correctly.
-//   4. Drive a realistic mix of statuses via PATCH /shipments/:id/status.
+//   3. Create senders, carriers, lots, shipments, status changes, and partial
+//      payments through the REST API so qtyAvailable invariants, shortCode,
+//      auditLog, statusHistory, and auto-generated transactions all populate
+//      via the real code paths.
 //
 // Every created doc carries DEMO_TAG in `notes` so clean-demo.mjs can purge it.
 
 import { MongoClient, ObjectId } from "mongodb";
 import { randomUUID } from "node:crypto";
 
-const required = ["API_BASE", "ADMIN_EMAIL", "ADMIN_PASSWORD", "MONGODB_URI"];
-for (const k of required) {
-  if (!process.env[k]) {
-    console.error(`Missing env: ${k}`);
-    process.exit(1);
-  }
+if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+  console.error(
+    "Missing ADMIN_EMAIL / ADMIN_PASSWORD. Either set them in apps/api/.env\n" +
+      "(picked up automatically by `npm run seed:demo`) or pass them inline."
+  );
+  process.exit(1);
 }
 
-const API_BASE = process.env.API_BASE.replace(/\/+$/, "");
+const API_BASE = (process.env.API_BASE || "http://localhost:4000/api/v1").replace(/\/+$/, "");
+const MONGODB_URI =
+  process.env.MONGODB_URI || "mongodb://localhost:27017/sadiyakargo?replicaSet=rs0";
 const ORG_ID = process.env.DEFAULT_ORG_ID || "000000000000000000000001";
 const DEMO_TAG = process.env.DEMO_TAG || "[DEMO]";
+
 // originCheck middleware requires Origin on every non-GET. Must match an entry
-// in the API's CORS_ORIGIN env. Defaults to the API origin itself — works iff
-// the API origin is listed in CORS_ORIGIN. Override with WEB_ORIGIN.
-const WEB_ORIGIN = process.env.WEB_ORIGIN || new URL(API_BASE).origin;
+// in the API's CORS_ORIGIN env. Pick the first CORS_ORIGIN entry when available
+// (the local apps/api/.env case); otherwise default to localhost:3000 for any
+// localhost API; final fallback is the API origin itself (single-origin prod).
+const WEB_ORIGIN =
+  process.env.WEB_ORIGIN ||
+  (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",")[0].trim() : null) ||
+  (new URL(API_BASE).hostname === "localhost" ? "http://localhost:3000" : new URL(API_BASE).origin);
 
 // ---------- tiny utils ----------
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -51,6 +65,7 @@ const shuffle = (arr) => {
   return a;
 };
 const daysAgo = (d) => new Date(Date.now() - d * 86_400_000);
+const isoDateOnly = (date) => date.toISOString().slice(0, 10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const safeJSON = (s) => {
   try {
@@ -245,310 +260,15 @@ async function readCategories(client) {
   return cats;
 }
 
-// ---------- Mongo-direct shipment helpers ----------
-//
-// POST /shipments on prod returns HTTP 500 even though the DB write commits
-// (diagnosed: 58 shipments + 146 transactions persisted on a "0 created" run).
-// Root cause is a Mongoose 8 + tsup bundling issue around nested money subdoc
-// or the post-commit `toClient()` call — needs a separate prod fix.
-//
-// Workaround for the demo: bypass the API and drive the same transactional
-// write directly against Mongo. The replica set works, withTransaction works
-// (tested), and the resulting docs are shape-compatible with the Mongoose
-// model so the API can read them once the prod write-path bug is fixed.
-
-async function convertAmountToUsd(db, amount, currency, date) {
-  if (currency === "USD") return { amountUsd: amount, rate: 1 };
-  const doc = await db
-    .collection("exchangerates")
-    .findOne({ currency, rateDate: { $lte: date } }, { sort: { rateDate: -1 } });
-  if (!doc) {
-    throw new Error(
-      `No exchange rate for ${currency} on or before ${date.toISOString().slice(0, 10)}`
-    );
-  }
-  return { amountUsd: Math.round(amount * doc.rateToUsd), rate: doc.rateToUsd };
-}
-
-async function nextShortCode(db, year, session) {
-  const ctr = await db
-    .collection("counters")
-    .findOneAndUpdate(
-      { _id: `shipment_${year}` },
-      { $inc: { seq: 1 } },
-      { session, upsert: true, returnDocument: "after" }
-    );
-  return `SH-${year}-${String(ctr.seq).padStart(5, "0")}`;
-}
-
-async function createShipmentMongo(client, orgIdHex, userIdHex, args) {
-  const { carrierId, recipient, shipmentDate, carrierFee, items, notes } = args;
-  const db = client.db();
-  const session = client.startSession();
-  let result;
-  try {
-    await session.withTransaction(async () => {
-      // 1. Lock-and-decrement every lot; bail with conflict if any short.
-      const lotSenderMap = new Map();
-      for (const item of items) {
-        const updated = await db.collection("inboundlots").findOneAndUpdate(
-          {
-            _id: new ObjectId(item.lotId),
-            orgId: new ObjectId(orgIdHex),
-            deletedAt: null,
-            qtyAvailable: { $gte: item.qty },
-          },
-          { $inc: { qtyAvailable: -item.qty }, $set: { updatedAt: new Date() } },
-          { session, returnDocument: "after" }
-        );
-        if (!updated) {
-          throw new Error(`Yetersiz stok: parti ${item.lotId} (istenen ${item.qty})`);
-        }
-        const newLotStatus = updated.qtyAvailable === 0 ? "fully_shipped" : "partially_shipped";
-        await db
-          .collection("inboundlots")
-          .updateOne(
-            { _id: new ObjectId(item.lotId) },
-            { $set: { status: newLotStatus, updatedAt: new Date() } },
-            { session }
-          );
-        lotSenderMap.set(item.lotId, updated.senderId.toString());
-      }
-
-      // 2. Mint shortCode atomically via counters.
-      const ship = new Date(shipmentDate);
-      const shortCode = await nextShortCode(db, ship.getFullYear(), session);
-
-      // 3. Insert the shipment doc — shape matches Mongoose schema exactly so
-      //    the API can read it via `Shipment.findOne` etc. Items get their own
-      //    _id like a Mongoose subdoc array.
-      const now = new Date();
-      const shipDoc = {
-        _id: new ObjectId(),
-        orgId: new ObjectId(orgIdHex),
-        shortCode,
-        carrierId: new ObjectId(carrierId),
-        recipient: recipient
-          ? {
-              name: recipient.name,
-              phone: recipient.phone,
-              addressTr: recipient.addressTr,
-            }
-          : null,
-        shipmentDate: ship,
-        carrierFee: { amount: carrierFee.amount, currency: carrierFee.currency },
-        status: "bekliyor",
-        items: items.map((it) => ({
-          _id: new ObjectId(),
-          lotId: new ObjectId(it.lotId),
-          qty: it.qty,
-          senderCharge: it.senderCharge
-            ? { amount: it.senderCharge.amount, currency: it.senderCharge.currency }
-            : null,
-        })),
-        statusHistory: [
-          {
-            fromStatus: null,
-            toStatus: "bekliyor",
-            changedBy: new ObjectId(userIdHex),
-            changedAt: now,
-            comment: "Oluşturuldu",
-          },
-        ],
-        publicTrackingToken: cryptoRandomHex(40),
-        notes: notes || "",
-        deletedAt: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await db.collection("shipments").insertOne(shipDoc, { session });
-
-      // 4. Auto-generate transactions: one carrier_charge + per-item sender_charge.
-      const txDate = ship;
-      const carrierUsd = await convertAmountToUsd(
-        db,
-        carrierFee.amount,
-        carrierFee.currency,
-        txDate
-      );
-      await db.collection("transactions").insertOne(
-        {
-          _id: new ObjectId(),
-          orgId: new ObjectId(orgIdHex),
-          kind: "carrier_charge",
-          counterparty: { type: "carrier", id: new ObjectId(carrierId) },
-          shipmentId: shipDoc._id,
-          amount: carrierFee.amount,
-          currency: carrierFee.currency,
-          direction: "debit",
-          txDate,
-          exchangeRateToUsd: carrierUsd.rate,
-          amountUsdSnapshot: carrierUsd.amountUsd,
-          method: "cash",
-          notes: `Sevkiyat ${shortCode}`,
-          reversesTransactionId: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { session }
-      );
-
-      for (const item of items) {
-        if (!item.senderCharge) continue;
-        const senderId = lotSenderMap.get(item.lotId);
-        if (!senderId) continue;
-        const sUsd = await convertAmountToUsd(
-          db,
-          item.senderCharge.amount,
-          item.senderCharge.currency,
-          txDate
-        );
-        await db.collection("transactions").insertOne(
-          {
-            _id: new ObjectId(),
-            orgId: new ObjectId(orgIdHex),
-            kind: "sender_charge",
-            counterparty: { type: "sender", id: new ObjectId(senderId) },
-            shipmentId: shipDoc._id,
-            amount: item.senderCharge.amount,
-            currency: item.senderCharge.currency,
-            direction: "debit",
-            txDate,
-            exchangeRateToUsd: sUsd.rate,
-            amountUsdSnapshot: sUsd.amountUsd,
-            method: "cash",
-            notes: `Sevkiyat ${shortCode}`,
-            reversesTransactionId: null,
-            createdAt: now,
-            updatedAt: now,
-          },
-          { session }
-        );
-      }
-
-      result = shipDoc;
-    });
-  } finally {
-    await session.endSession();
-  }
-  return result;
-}
-
-async function updateStatusMongo(client, orgIdHex, userIdHex, shipmentId, toStatus, comment) {
-  const db = client.db();
-  const ship = await db.collection("shipments").findOne({ _id: shipmentId });
-  if (!ship) throw new Error(`shipment ${shipmentId} not found`);
-  if (ship.status === toStatus) return;
-  const fromStatus = ship.status;
-  const now = new Date();
-
-  if (toStatus === "iptal" && fromStatus !== "iptal") {
-    const session = client.startSession();
-    try {
-      await session.withTransaction(async () => {
-        // Reverse qtyAvailable on every lot in the shipment.
-        for (const item of ship.items) {
-          await db.collection("inboundlots").updateOne(
-            { _id: item.lotId, orgId: ship.orgId },
-            {
-              $inc: { qtyAvailable: item.qty },
-              $set: { status: "in_stock", updatedAt: now },
-            },
-            { session }
-          );
-        }
-        // Reverse every original transaction with a same-amount adjustment.
-        const originals = await db
-          .collection("transactions")
-          .find({ shipmentId: ship._id }, { session })
-          .toArray();
-        for (const orig of originals) {
-          if (orig.kind === "adjustment") continue;
-          const reverseUsd = await convertAmountToUsd(db, orig.amount, orig.currency, now);
-          await db.collection("transactions").insertOne(
-            {
-              _id: new ObjectId(),
-              orgId: ship.orgId,
-              kind: "adjustment",
-              counterparty: orig.counterparty,
-              shipmentId: ship._id,
-              amount: orig.amount,
-              currency: orig.currency,
-              direction: orig.direction === "debit" ? "credit" : "debit",
-              txDate: now,
-              exchangeRateToUsd: reverseUsd.rate,
-              amountUsdSnapshot: reverseUsd.amountUsd,
-              method: "cash",
-              notes: `İptal: ${ship.shortCode}`,
-              reversesTransactionId: orig._id,
-              createdAt: now,
-              updatedAt: now,
-            },
-            { session }
-          );
-        }
-        // Flip status + push history entry.
-        await db.collection("shipments").updateOne(
-          { _id: ship._id },
-          {
-            $set: { status: "iptal", updatedAt: now },
-            $push: {
-              statusHistory: {
-                fromStatus,
-                toStatus: "iptal",
-                changedBy: new ObjectId(userIdHex),
-                changedAt: now,
-                comment: comment || "İptal edildi",
-              },
-            },
-          },
-          { session }
-        );
-      });
-    } finally {
-      await session.endSession();
-    }
-  } else {
-    // Simple status flip — no qty/financial side effects.
-    await db.collection("shipments").updateOne(
-      { _id: ship._id },
-      {
-        $set: { status: toStatus, updatedAt: now },
-        $push: {
-          statusHistory: {
-            fromStatus,
-            toStatus,
-            changedBy: new ObjectId(userIdHex),
-            changedAt: now,
-            comment: comment || "",
-          },
-        },
-      }
-    );
-  }
-}
-
-function cryptoRandomHex(chars) {
-  // Use crypto.randomBytes (already imported via node:crypto for randomUUID).
-  return Array.from(
-    { length: chars },
-    () => "0123456789abcdef"[Math.floor(Math.random() * 16)]
-  ).join("");
-}
-
 // ---------- main flow ----------
 async function main() {
-  console.log(`[setup] API=${API_BASE}  org=${ORG_ID}  tag="${DEMO_TAG}"`);
-  console.log(
-    `[setup] Hybrid: senders/carriers/lots/payments → API; shipments → Mongo-direct (prod 500 bug).`
-  );
+  console.log(`[setup] API=${API_BASE}  origin=${WEB_ORIGIN}  org=${ORG_ID}  tag="${DEMO_TAG}"`);
 
-  const client = await MongoClient.connect(process.env.MONGODB_URI);
+  const client = await MongoClient.connect(MONGODB_URI);
   try {
     console.log("[1/8] Logging in as admin ...");
     const user = await login();
     console.log(`       OK, logged in as ${user.email} (role: ${user.role})`);
-    const adminUserId = user.id;
 
     console.log("[2/8] Bootstrapping exchangeRates ...");
     const added = await seedRates(client);
@@ -589,23 +309,36 @@ async function main() {
     console.log(`       created ${carriers.length} carriers`);
 
     console.log("[5/8] Creating 80 lots via API (backdated up to 30d) ...");
-    // unitPrice omitted: API 500s on lot.unitPrice nested subdoc (prod bug).
     const lots = [];
     for (let i = 0; i < 80; i++) {
       const sender = pick(senders);
       const category = pick(categories);
+      const tail = pick(NOTES_TAILS);
+      // Label = "<sender first name> — <tail phrase>" (Turkish-style).
+      const label = `${sender.fullName.split(" ")[0]} — ${tail}`;
+      // unitPrice realistic per currency: USD $5–$80 → 500–8000 cents,
+      // TRY ₺50–₺2000 → 5000–200000 kuruş, UZS 50k–2M soum → 5M–200M tiyin.
+      const currency = pick(["USD", "TRY", "UZS"]);
+      const unitPriceMinor =
+        currency === "USD"
+          ? rand(500, 8000)
+          : currency === "TRY"
+            ? rand(5000, 200000)
+            : rand(5_000_000, 200_000_000);
       const lot = await api("POST", "/lots", {
         senderId: sender.id,
         categoryId: category._id.toString(),
+        label,
         qtyIn: rand(5, 150),
+        unitPrice: { amount: unitPriceMinor, currency },
         receivedAt: daysAgo(rand(0, 30)).toISOString(),
-        notes: `${DEMO_TAG} ${pick(NOTES_TAILS)} (#${i + 1})`,
+        notes: `${DEMO_TAG} ${tail} (#${i + 1})`,
       });
       lots.push(lot);
     }
     console.log(`       created ${lots.length} lots`);
 
-    console.log("[6/8] Creating up to 60 shipments via Mongo-direct ...");
+    console.log("[6/8] Creating up to 60 shipments via API ...");
     const shipments = [];
     const localAvail = new Map(lots.map((l) => [l.id, l.qtyIn]));
     for (let i = 0; i < 60; i++) {
@@ -625,23 +358,30 @@ async function main() {
         return { lotId: lot.id, qty, senderCharge };
       });
       const carrier = pick(carriers);
-      const shipmentDate = daysAgo(rand(0, 30));
+      // shipmentDate must be YYYY-MM-DD (zod .date(), not .datetime()).
+      const shipmentDate = isoDateOnly(daysAgo(rand(0, 30)));
       try {
-        const sh = await createShipmentMongo(client, ORG_ID, adminUserId, {
-          carrierId: carrier.id,
-          recipient: {
-            name: pick(RECIPIENT_NAMES),
-            phone: trPhone(),
-            addressTr: pick(CITIES),
+        const sh = await api(
+          "POST",
+          "/shipments",
+          {
+            carrierId: carrier.id,
+            recipient: {
+              name: pick(RECIPIENT_NAMES),
+              phone: trPhone(),
+              addressTr: pick(CITIES),
+            },
+            shipmentDate,
+            carrierFee: { amount: rand(3000, 20000), currency: pick(["USD", "TRY"]) },
+            items,
+            notes: `${DEMO_TAG} shipment #${i + 1}`,
           },
-          shipmentDate,
-          carrierFee: { amount: rand(3000, 20000), currency: pick(["USD", "TRY"]) },
-          items,
-          notes: `${DEMO_TAG} shipment #${i + 1}`,
-        });
+          { idempotencyKey: randomUUID() }
+        );
         shipments.push(sh);
       } catch (e) {
         console.warn(`       ! shipment #${i + 1} failed: ${e.message}`);
+        // Roll back local-availability bookkeeping so subsequent picks stay sane.
         for (const it of items) {
           localAvail.set(it.lotId, (localAvail.get(it.lotId) || 0) + it.qty);
         }
@@ -667,54 +407,46 @@ async function main() {
         if (target === "bekliyor") {
           continue;
         } else if (target === "iptal") {
-          await updateStatusMongo(
-            client,
-            ORG_ID,
-            adminUserId,
-            sh._id,
-            "iptal",
-            `${DEMO_TAG} müşteri iptal etti`
-          );
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "iptal",
+            comment: `${DEMO_TAG} müşteri iptal etti`,
+          });
         } else if (target === "teslim") {
-          await updateStatusMongo(client, ORG_ID, adminUserId, sh._id, "yolda", "Kargoya verildi");
-          await updateStatusMongo(
-            client,
-            ORG_ID,
-            adminUserId,
-            sh._id,
-            "teslim",
-            "Alıcıya teslim edildi"
-          );
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "yolda",
+            comment: "Kargoya verildi",
+          });
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "teslim",
+            comment: "Alıcıya teslim edildi",
+          });
         } else if (target === "yolda") {
-          await updateStatusMongo(client, ORG_ID, adminUserId, sh._id, "yolda", "Yola çıktı");
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "yolda",
+            comment: "Yola çıktı",
+          });
         } else if (target === "kayip") {
-          await updateStatusMongo(client, ORG_ID, adminUserId, sh._id, "yolda", "Yola çıktı");
-          await updateStatusMongo(
-            client,
-            ORG_ID,
-            adminUserId,
-            sh._id,
-            "kayip",
-            `${DEMO_TAG} kayıp bildirildi`
-          );
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "yolda",
+            comment: "Yola çıktı",
+          });
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "kayip",
+            comment: `${DEMO_TAG} kayıp bildirildi`,
+          });
         } else if (target === "borclu") {
-          await updateStatusMongo(client, ORG_ID, adminUserId, sh._id, "yolda", "Yola çıktı");
-          await updateStatusMongo(
-            client,
-            ORG_ID,
-            adminUserId,
-            sh._id,
-            "teslim",
-            "Alıcıya teslim edildi"
-          );
-          await updateStatusMongo(
-            client,
-            ORG_ID,
-            adminUserId,
-            sh._id,
-            "borclu",
-            `${DEMO_TAG} ödeme bekleniyor`
-          );
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "yolda",
+            comment: "Yola çıktı",
+          });
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "teslim",
+            comment: "Alıcıya teslim edildi",
+          });
+          await api("PATCH", `/shipments/${sh.id}/status`, {
+            status: "borclu",
+            comment: `${DEMO_TAG} ödeme bekleniyor`,
+          });
         }
       } catch (e) {
         console.warn(`       ! status change ${sh.shortCode}→${target} failed: ${e.message}`);

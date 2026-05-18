@@ -77,6 +77,7 @@ export interface InboundLot {
   id: string;
   senderId: string;
   categoryId: string;
+  label: string;
   qtyIn: number;
   qtyAvailable: number;
   unitPrice: Money | null;

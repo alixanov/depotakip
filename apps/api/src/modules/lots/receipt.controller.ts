@@ -31,8 +31,10 @@ export const receiptPdf = asyncHandler<IdParams>(async (req, res) => {
     qrDataUrl: qr,
     lot: {
       id: lot._id.toString(),
+      label: lot.label || "",
       receivedAt: lot.receivedAt.toISOString(),
       qtyIn: lot.qtyIn,
+      unitPrice: lot.unitPrice ?? null,
       notes: lot.notes,
     },
     sender: {

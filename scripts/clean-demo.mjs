@@ -2,8 +2,11 @@
 // scripts/clean-demo.mjs
 //
 // Companion to seed-demo.mjs. Removes every demo-tagged document
-// (notes ^[DEMO]) for the configured org. Run with the same env:
-//   MONGODB_URI, DEFAULT_ORG_ID (optional), DEMO_TAG (optional).
+// (notes ^[DEMO]) for the configured org. Defaults match LOCAL DEV;
+// override via env for prod:
+//   MONGODB_URI      default mongodb://localhost:27017/sadiyakargo?replicaSet=rs0
+//   DEFAULT_ORG_ID   default 000000000000000000000001
+//   DEMO_TAG         default "[DEMO]"
 //
 // Deletes hard, not soft — demo rows have no audit value.
 // Order is important: transactions first (FK to shipments), then shipments,
@@ -12,18 +15,15 @@
 
 import { MongoClient, ObjectId } from "mongodb";
 
-if (!process.env.MONGODB_URI) {
-  console.error("Missing env: MONGODB_URI");
-  process.exit(1);
-}
-
+const MONGODB_URI =
+  process.env.MONGODB_URI || "mongodb://localhost:27017/sadiyakargo?replicaSet=rs0";
 const ORG_ID = process.env.DEFAULT_ORG_ID || "000000000000000000000001";
 const DEMO_TAG = process.env.DEMO_TAG || "[DEMO]";
 const orgFilter = { orgId: new ObjectId(ORG_ID) };
 const tagRx = new RegExp(`^${DEMO_TAG.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
 const tagFilter = { notes: tagRx };
 
-const client = await MongoClient.connect(process.env.MONGODB_URI);
+const client = await MongoClient.connect(MONGODB_URI);
 try {
   const db = client.db();
 

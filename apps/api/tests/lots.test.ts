@@ -105,7 +105,7 @@ describe("/lots", () => {
     expect(list.body.pagination.total).toBe(3);
   });
 
-  it("update mutates only notes", async () => {
+  it("update mutates label + notes only", async () => {
     const created = await request(app)
       .post(apiPath("/lots"))
       .set(...authHeader(ctx.token))
@@ -115,10 +115,37 @@ describe("/lots", () => {
     const updated = await request(app)
       .patch(apiPath(`/lots/${created.body.id}`))
       .set(...authHeader(ctx.token))
-      .send({ notes: "yeni not" })
+      .send({ label: "Sonbahar montları", notes: "yeni not" })
       .expect(200);
+    expect(updated.body.label).toBe("Sonbahar montları");
     expect(updated.body.notes).toBe("yeni not");
     expect(updated.body.qtyIn).toBe(7);
+  });
+
+  it("create accepts optional label + unitPrice", async () => {
+    const res = await request(app)
+      .post(apiPath("/lots"))
+      .set(...authHeader(ctx.token))
+      .send({
+        senderId: ctx.senderId,
+        categoryId: ctx.categoryId,
+        label: "Sonbahar montları",
+        qtyIn: 12,
+        unitPrice: { amount: 1500, currency: "USD" },
+      })
+      .expect(201);
+    expect(res.body.label).toBe("Sonbahar montları");
+    expect(res.body.unitPrice).toEqual({ amount: 1500, currency: "USD" });
+  });
+
+  it("create defaults label='' when omitted", async () => {
+    const res = await request(app)
+      .post(apiPath("/lots"))
+      .set(...authHeader(ctx.token))
+      .send({ senderId: ctx.senderId, categoryId: ctx.categoryId, qtyIn: 3 })
+      .expect(201);
+    expect(res.body.label).toBe("");
+    expect(res.body.unitPrice).toBeNull();
   });
 
   it("delete works when nothing has been shipped (qtyAvailable == qtyIn)", async () => {
@@ -208,6 +235,6 @@ describe("/lots/:id/receipt.pdf", () => {
     expect(res.headers["content-type"]).toContain("application/pdf");
     const body = res.body as Buffer;
     // PDF files start with %PDF
-    expect(body.slice(0, 4).toString()).toBe("%PDF");
+    expect(body.subarray(0, 4).toString()).toBe("%PDF");
   }, 30_000);
 });

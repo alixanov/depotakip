@@ -26,6 +26,8 @@
     "migrate:up": "npm run migrate:up --workspace @sadiyakargo/api",
     "migrate:down": "npm run migrate:down --workspace @sadiyakargo/api",
     "migrate:status": "npm run migrate:status --workspace @sadiyakargo/api",
+    "seed:demo": "node --env-file=apps/api/.env scripts/seed-demo.mjs",
+    "clean:demo": "node --env-file=apps/api/.env scripts/clean-demo.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

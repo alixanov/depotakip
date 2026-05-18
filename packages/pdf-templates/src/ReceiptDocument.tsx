@@ -6,8 +6,10 @@ export interface ReceiptDocumentProps {
   qrDataUrl: string;
   lot: {
     id: string;
+    label?: string;
     receivedAt: string;
     qtyIn: number;
+    unitPrice?: { amount: number; currency: "USD" | "UZS" | "TRY" } | null;
     notes?: string;
   };
   sender: {
@@ -20,6 +22,12 @@ export interface ReceiptDocumentProps {
   org: {
     name: string;
   };
+}
+
+/** Format a Money value (minor units → display) for the PDF. */
+function formatMoney(m: { amount: number; currency: string }): string {
+  const display = (m.amount / 100).toFixed(2);
+  return `${display} ${m.currency}`;
 }
 
 export function ReceiptDocument({ qrDataUrl, lot, sender, category, org }: ReceiptDocumentProps) {
@@ -51,6 +59,12 @@ export function ReceiptDocument({ qrDataUrl, lot, sender, category, org }: Recei
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Mal</Text>
+          {lot.label && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Parti adı</Text>
+              <Text style={styles.value}>{lot.label}</Text>
+            </View>
+          )}
           <View style={styles.row}>
             <Text style={styles.label}>Kategori</Text>
             <Text style={styles.value}>{category.name}</Text>
@@ -59,6 +73,23 @@ export function ReceiptDocument({ qrDataUrl, lot, sender, category, org }: Recei
             <Text style={styles.label}>Adet</Text>
             <Text style={styles.value}>{lot.qtyIn}</Text>
           </View>
+          {lot.unitPrice && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Birim fiyat</Text>
+              <Text style={styles.value}>{formatMoney(lot.unitPrice)}</Text>
+            </View>
+          )}
+          {lot.unitPrice && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Toplam</Text>
+              <Text style={styles.value}>
+                {formatMoney({
+                  amount: lot.unitPrice.amount * lot.qtyIn,
+                  currency: lot.unitPrice.currency,
+                })}
+              </Text>
+            </View>
+          )}
           {lot.notes && (
             <View style={styles.row}>
               <Text style={styles.label}>Notlar</Text>

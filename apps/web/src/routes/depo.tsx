@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createLotSchema, type CreateLotInput, type InboundLot } from "@sadiyakargo/shared";
+import { CURRENCIES, type CreateLotInput, type InboundLot } from "@sadiyakargo/shared";
 import { Download, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,15 @@ import { sendersApi } from "@/lib/api/senders";
 import { useApiFormErrors } from "@/lib/useApiFormErrors";
 import { requireAuth } from "@/lib/guards";
 import { useAuthStore } from "@/stores/auth";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoneyObject, toMinor } from "@/lib/format";
 import { LotStatusPill } from "@/components/ui/status-pill";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const TABS = ["lots", "receive", "stock"] as const;
 type Tab = (typeof TABS)[number];
@@ -141,7 +148,12 @@ function LotsTab() {
     {
       key: "sender",
       header: t("depo:col_sender"),
-      cell: (l) => <span className="font-medium">{senderName(l.senderId)}</span>,
+      cell: (l) => (
+        <div className="min-w-0">
+          <div className="truncate font-medium">{senderName(l.senderId)}</div>
+          {l.label && <div className="truncate text-xs text-muted-foreground">{l.label}</div>}
+        </div>
+      ),
     },
     {
       key: "category",
@@ -158,6 +170,18 @@ function LotsTab() {
         </span>
       ),
       width: "100px",
+    },
+    {
+      key: "unitPrice",
+      header: t("depo:col_unitPrice"),
+      cell: (l) =>
+        l.unitPrice ? (
+          <span className="tabular-nums">{formatMoneyObject(l.unitPrice)}</span>
+        ) : (
+          <span className="text-muted-foreground">{t("depo:unitPrice_empty")}</span>
+        ),
+      width: "120px",
+      className: "text-right",
     },
     {
       key: "status",
@@ -243,6 +267,9 @@ function LotsTab() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{senderName(l.senderId)}</p>
+                    {l.label && (
+                      <p className="truncate text-xs font-medium text-foreground/80">{l.label}</p>
+                    )}
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {categoryName(l.categoryId)} · {formatDate(l.receivedAt)}
                     </p>
@@ -250,10 +277,17 @@ function LotsTab() {
                   <LotStatusPill status={l.status} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm tabular-nums">
-                    <span className="font-bold">{l.qtyAvailable}</span>
-                    <span className="text-muted-foreground"> / {l.qtyIn}</span>
-                  </span>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-sm tabular-nums">
+                      <span className="font-bold">{l.qtyAvailable}</span>
+                      <span className="text-muted-foreground"> / {l.qtyIn}</span>
+                    </span>
+                    {l.unitPrice && (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {formatMoneyObject(l.unitPrice)}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
@@ -295,6 +329,24 @@ function LotsTab() {
   );
 }
 
+/**
+ * Form values use *display* units (e.g. 50.00 USD). Conversion to minor units
+ * (5000 cents) happens at submit time — same pattern as cikis.tsx. Both
+ * `label` and `unitPrice` are optional; an empty amount means "no price".
+ */
+const receiveFormSchema = z.object({
+  senderId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Gönderici seçin"),
+  categoryId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Kategori seçin"),
+  label: z.string().trim().max(120).default(""),
+  qtyIn: z.coerce.number().int().positive(),
+  unitPriceAmount: z.coerce.number().nonnegative().optional(),
+  unitPriceCurrency: z.enum(CURRENCIES),
+  receivedAt: z.string().min(1),
+  notes: z.string().trim().max(1000).default(""),
+});
+
+type ReceiveFormValues = z.infer<typeof receiveFormSchema>;
+
 function ReceiveTab() {
   const qc = useQueryClient();
   const [serverError, setServerError] = useState("");
@@ -309,12 +361,15 @@ function ReceiveTab() {
     queryFn: () => categoriesApi.list({ active: true }),
   });
 
-  const form = useForm<CreateLotInput>({
-    resolver: zodResolver(createLotSchema),
+  const form = useForm<ReceiveFormValues>({
+    resolver: zodResolver(receiveFormSchema),
     defaultValues: {
       senderId: "",
       categoryId: "",
+      label: "",
       qtyIn: 1,
+      unitPriceAmount: undefined,
+      unitPriceCurrency: "USD",
       notes: "",
       receivedAt: new Date().toISOString(),
     },
@@ -335,17 +390,32 @@ function ReceiveTab() {
   //             lots from the same supplier back-to-back.
   type SaveMode = "close" | "new";
   const submit = (mode: SaveMode) =>
-    form.handleSubmit(async (data) => {
+    form.handleSubmit(async (values) => {
       setServerError("");
+      const payload: CreateLotInput = {
+        senderId: values.senderId,
+        categoryId: values.categoryId,
+        label: values.label || undefined,
+        qtyIn: values.qtyIn,
+        unitPrice:
+          values.unitPriceAmount && values.unitPriceAmount > 0
+            ? { amount: toMinor(values.unitPriceAmount), currency: values.unitPriceCurrency }
+            : null,
+        notes: values.notes,
+        receivedAt: values.receivedAt,
+      };
       try {
-        const lot = await create.mutateAsync(data);
+        const lot = await create.mutateAsync(payload);
         toast.success(t("depo:toast_created"), {
           description: t("depo:toast_created_desc", { code: lot.id.slice(-6) }),
         });
         form.reset({
-          senderId: mode === "new" ? data.senderId : "",
+          senderId: mode === "new" ? values.senderId : "",
           categoryId: "",
+          label: "",
           qtyIn: 1,
+          unitPriceAmount: undefined,
+          unitPriceCurrency: values.unitPriceCurrency,
           notes: "",
           receivedAt: new Date().toISOString(),
         });
@@ -430,6 +500,16 @@ function ReceiveTab() {
             <FieldError>{form.formState.errors.categoryId?.message}</FieldError>
           </div>
 
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>{t("depo:form_label")}</Label>
+            <Input
+              {...form.register("label")}
+              placeholder={t("depo:form_label_ph")}
+              aria-invalid={!!form.formState.errors.label}
+            />
+            <FieldError>{form.formState.errors.label?.message}</FieldError>
+          </div>
+
           <div className="space-y-1.5">
             <Label>{t("depo:form_qty")}</Label>
             <Controller
@@ -440,6 +520,43 @@ function ReceiveTab() {
               )}
             />
             <FieldError>{form.formState.errors.qtyIn?.message}</FieldError>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("depo:form_unitPrice")}</Label>
+            <div className="flex gap-1.5">
+              <Controller
+                name="unitPriceAmount"
+                control={form.control}
+                render={({ field }) => (
+                  <NumberInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    min={0}
+                    className="flex-1"
+                  />
+                )}
+              />
+              <Controller
+                name="unitPriceCurrency"
+                control={form.control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-20 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <FieldError>{form.formState.errors.unitPriceAmount?.message}</FieldError>
           </div>
 
           <div className="space-y-1.5">
